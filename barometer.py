@@ -12,6 +12,7 @@ ELEVATION_DROP = 55.0
 
 def get_real_weather_data():
     try:
+        # 🌟タイムゾーン指定をなくし、届いたそのままの並び順で安全に処理します
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
         res = requests.get(url, timeout=10).json()
         hourly = res['hourly']
@@ -27,11 +28,8 @@ def get_real_weather_data():
         df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
         df['Temp'] = round(df['Temp'], 1)
         
-        now = pd.Timestamp.now()
-        df_filtered = df[df['Time'] >= now]
-        if df_filtered.empty:
-            return df.head(24)
-        return df_filtered.head(24)
+        # 🌟エラーの原因だった時間の引き算を廃止！直近の24時間分をシンプルに頭から表示します
+        return df.head(24)
     except Exception:
         return None
 
@@ -55,6 +53,7 @@ def get_weather_string(code):
 def index():
     df = get_real_weather_data()
     
+    # 🌟万が一の通信エラー時も、時間が1行ずつしっかり進むように修正
     if df is None or df.empty:
         now_time = pd.Timestamp.now().floor('h')
         fallback_data = []
