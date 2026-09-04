@@ -1,231 +1,474 @@
 from flask import Flask
-import requests
-import pandas as pd
 import os
+
+import pandas as pd
+import requests
+
 app = Flask(__name__)
-# 🏡 東伊豆町奈良本
-LAT = 34.8156
-LON = 139.0684
-def get_real_weather_data():
+
+# 麓：海岸・国道135号周辺（伊豆熱川駅付近）
+COAST_LAT = 34.8156
+COAST_LON = 139.0684
+
+# 現地：奈良本1489-23付近
+# 近傍住所の座標を使用
+HIGHLAND_LAT = 34.8346
+HIGHLAND_LON = 139.0481
+HIGHLAND_ELEVATION = 500
+
+
+def get_weather_data(latitude, longitude, elevation=None):
+    """指定地点の現在以降24時間分の気象予報を取得する。"""
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "hourly": (
+            "pressure_msl,"
+            "surface_pressure,"
+            "weather_code,"
+            "temperature_2m,"
+            "relative_humidity_2m,"
+            "precipitation"
+        ),
+        "timezone": "Asia/Tokyo",
+        "forecast_days": 2,
+    }
+
+    # 現地のみ、標高500mとして計算してもらう
+    if elevation is not None:
+        params["elevation"] = elevation
+
     try:
-        # 🌟 チャットGPTのアドバイス通り、elevation=500を指定し、surface_pressureも同時に取得
-        url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={LAT}&longitude={LON}&elevation=500"
-            "&hourly=pressure_msl,surface_pressure,weather_code,temperature_2m,relative_humidity_2m,precipitation"
-            "&timezone=Asia%2FTokyo"
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+
+        hourly = response.json().get("hourly")
+        if not hourly:
+            return None
+
+        df = pd.DataFrame(
+            {
+                "Time": pd.to_datetime(hourly["time"]),
+                "PressMSL": hourly["pressure_msl"],
+                "SurfacePress": hourly["surface_pressure"],
+                "Code": hourly["weather_code"],
+                "Temp": hourly["temperature_2m"],
+                "Humi": hourly["relative_humidity_2m"],
+                "Rain": hourly["precipitation"],
+            }
         )
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=15)
-        
-        if res.status_code == 200:
-            res_json = res.json()
-            if 'hourly' in res_json:
-                hourly = res_json['hourly']
-                
-                # 🌟 APIが算出した正確な海面更正気圧と、標高500mの地表気圧・気温をそのまま使用
-                df = pd.DataFrame({
-                    'Time': pd.to_datetime(hourly['time']),
-                    'Press_MSL': hourly['pressure_msl'],         # 海面更正気圧（天気予報基準）
-                    'Press_500m': hourly['surface_pressure'],     # 標高500mの実際の地表気圧
-                    'Code': hourly['weather_code'],
-                    'Temp_500m': hourly['temperature_2m'],        # 標高500mの実際の気温
-                    'Humi': hourly['relative_humidity_2m'],
-                    'Rain': hourly['precipitation'],
-                    'IsFallback': False                           # 本物のデータであるフラグ
-                })
-                
-                df['Press_MSL'] = round(df['Press_MSL'], 1)
-                df['Press_500m'] = round(df['Press_500m'], 1)
-                df['Temp_500m'] = round(df['Temp_500m'], 1)
-                df["Humi"] = df["Humi"].round().astype(int)
-                
-                now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
-                df_filtered = df[df['Time'] >= now]
-                
-                if not df_filtered.empty:
-                    return df_filtered.head(24)
-                return df.head(24)
-        else:
-            print(f"API Error Status Code: {res.status_code}")
-    except Exception as e:
-        print("API Access Error:", e)
-    return None
+
+        df["PressMSL"] = df["PressMSL"].round(1)
+        df["SurfacePress"] = df["SurfacePress"].round(1)
+        df["Temp"] = df["Temp"].round(1)
+        df["Humi"] = df["Humi"].round().astype(int)
+        df["Rain"] = df["Rain"].round(1)
+
+        now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
+        future_df = df[df["Time"] >= now]
+
+        return (future_df if not future_df.empty else df).head(24)
+
+    except (requests.RequestException, ValueError, KeyError) as error:
+        app.logger.warning("Weather API error: %s", error)
+        return None
+
+
+def create_fallback_data(is_highland):
+    """通信失敗時に画面を維持するための仮データ。"""
+    now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
+
+    if is_highland:
+        press_msl = 1013.0
+        surface_press = 955.0
+        temp = 20.0
+        humi = 70
+    else:
+        press_msl = 1013.0
+        surface_press = 1010.0
+        temp = 23.0
+        humi = 68
+
+    return pd.DataFrame(
+        [
+            {
+                "Time": now + pd.Timedelta(hours=i),
+                "PressMSL": press_msl,
+                "SurfacePress": surface_press,
+                "Code": 2,
+                "Temp": temp,
+                "Humi": humi,
+                "Rain": 0.0,
+            }
+            for i in range(24)
+        ]
+    )
+
+
 def get_weather_string(code):
-    # 🌟 指摘通り、降水量による上書きを廃止し、APIの天気コードを最優先に判定（霧雨や降り始めも正確に網羅）
-    c = int(code)
-    if c == 0: return "☀️ 快晴"
-    elif c >= 1 and c <= 3: return "☁️ くもり"
-    elif c == 45 or c == 48: return "🌫️ 霧"
-    elif (c >= 51 and c <= 67) or (c >= 80 and c <= 82): return "☔ 雨"
-    elif (c >= 71 and c <= 77) or (c >= 85 and c <= 86): return "❄️ 雪"
-    elif c == 95 or c == 96 or c == 99: return "⚡ 雷雨"
+    code = int(code)
+
+    if code == 0:
+        return "☀️ 快晴"
+    if code == 1:
+        return "🌤️ 晴れ"
+    if code == 2:
+        return "⛅ 晴れ時々くもり"
+    if code == 3:
+        return "☁️ くもり"
+    if code in (45, 48):
+        return "🌫️ 霧"
+    if 51 <= code <= 67 or 80 <= code <= 82:
+        return "☔ 雨"
+    if 71 <= code <= 77 or 85 <= code <= 86:
+        return "❄️ 雪"
+    if code in (95, 96, 99):
+        return "⚡ 雷雨"
+
     return "☁️ くもり"
+
 
 @app.route("/")
 def index():
-    df = get_real_weather_data()
-    
-    is_fallback = False
-    # 🌟 通信失敗時のセーフティ（IsFallbackをTrueにして、ユーザーに障害中であることを明示）
-    if df is None or df.empty:
-        is_fallback = True
-        now_time = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
-        fallback_data = []
-        for i in range(24):
-            fallback_data.append({
-                'Time': now_time + pd.Timedelta(hours=i),
-                'Press_MSL': 1013.0, 'Press_500m': 955.0, 
-                'Code': 2, 'Temp_500m': 20.0, 
-                'Humi': 70, 'Rain': 0.0, 'IsFallback': True
-            })
-        df = pd.DataFrame(fallback_data)
-    
-    current_press_msl = df['Press_MSL'].head(1).item()
-    current_press_500m = df['Press_500m'].head(1).item()
-    current_weather = get_weather_string(df['Code'].head(1).item())
-    current_temp_500m = df['Temp_500m'].head(1).item()
-    current_humi = df['Humi'].head(1).item()
-    current_rain = df['Rain'].head(1).item() 
-    
-    # 🌟 障害発生時は、上部に目立つ警告バナーを表示する
-    if is_fallback:
+    # 現地（標高500m）と麓を別々に取得
+    highland_df = get_weather_data(
+        HIGHLAND_LAT,
+        HIGHLAND_LON,
+        HIGHLAND_ELEVATION,
+    )
+    coast_df = get_weather_data(COAST_LAT, COAST_LON)
+
+    highland_fallback = highland_df is None or highland_df.empty
+    coast_fallback = coast_df is None or coast_df.empty
+
+    if highland_fallback:
+        highland_df = create_fallback_data(is_highland=True)
+
+    if coast_fallback:
+        coast_df = create_fallback_data(is_highland=False)
+
+    data_error = highland_fallback or coast_fallback
+
+    # 現地の時間別データに、麓の気温を結合
+    coast_temp = coast_df[["Time", "Temp"]].rename(
+        columns={"Temp": "CoastTemp"}
+    )
+    df = highland_df.merge(coast_temp, on="Time", how="left")
+    df["CoastTemp"] = df["CoastTemp"].fillna(df["Temp"])
+
+    current = df.iloc[0]
+
+    current_press = current["SurfacePress"]
+    current_forecast_press = current["PressMSL"]
+    current_weather = get_weather_string(current["Code"])
+    current_temp = current["Temp"]
+    current_coast_temp = current["CoastTemp"]
+    current_humi = current["Humi"]
+    current_rain = current["Rain"]
+
+    # 気圧アラートは、天気予報と同じ海面更正気圧を基準にする
+    if data_error:
         alert_bg = "#fffaf0"
         alert_border = "#ffe4b5"
-        alert_text = "#b8860b"
-        message = "<b>⚠️ 【データ取得失敗】現在、気象APIとの通信ができません。表示されている数値は「過去の平均参考値」です。</b>"
-    # 頭痛リスク管理のため、天気予報基準（海面更正気圧）でアラート判定
-    elif current_press_msl <= 1005.0: 
+        alert_text = "#92400e"
+        message = (
+            "<b>⚠️ データ取得に失敗しています。</b>"
+            "<br>一部または全部の数値は仮の参考値です。"
+        )
+    elif current_forecast_press <= 1005.0:
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
-        message = f"<b>🔴 【気圧警戒】現在 海面更正気圧が {current_press_msl} hPa まで低下しています！</b><br>頭痛のリスクが高い時間帯です。お部屋を暗くして、ワンちゃんと一緒にのんびり過ごしてください。"
-    elif current_press_msl <= 1010.0: 
+        message = (
+            f"<b>🔴 気圧警戒：天気予報の気圧は "
+            f"{current_forecast_press:.1f} hPa です。</b>"
+            "<br>気圧変化に敏感な方は、無理をせずゆっくり過ごしましょう。"
+        )
+    elif current_forecast_press <= 1010.0:
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
-        alert_text = "#723b13"
-        message = f"<b>⚠️ 【気圧注意】海面更正気圧が {current_press_msl} hPa まで下がっています</b><br>自律神経に負担がかかりやすい状態です。のんびり安全運転を心がけましょう。"
-    else: 
+        alert_text = "#78350f"
+        message = (
+            f"<b>⚠️ 気圧注意：天気予報の気圧は "
+            f"{current_forecast_press:.1f} hPa です。</b>"
+            "<br>体調の変化に気をつけて過ごしましょう。"
+        )
+    else:
         alert_bg = "#f3f8fc"
         alert_border = "#e1effa"
         alert_text = "#1e429f"
-        message = "<b>🍏 【環境安定】現在の気圧は比較的穏やかです</b><br>これからの気圧の変化に備えて、今のうちに温かい水分を補給してリラックスしておきましょう。"
+        message = (
+            "<b>🍏 気圧は比較的穏やかです。</b>"
+            "<br>水分補給をして、ゆったり過ごしましょう。"
+        )
 
     rows_html = ""
-    for _, row in df.iterrows():
-        time_str = row['Time'].strftime('%H:%M')
-        weather_txt = get_weather_string(row['Code'])
-        p_msl = row['Press_MSL']
-        p_500m = row['Press_500m']
-        t_500m = row['Temp_500m']
-        h_val = row['Humi']
-        r_val = row['Rain'] 
-        
-        bg = ""
-        if not is_fallback:
-            bg = "background:#fffdfd;" if p_msl <= 1005.0 else ("background:#fffdf6;" if p_msl <= 1010.0 else "")
-            status_txt = "🔴 警戒" if p_msl <= 1005.0 else ("⚠️ 注意" if p_msl <= 1010.0 else "正常")
-            status_color = "#e02424" if p_msl <= 1005.0 else ("#b45309" if p_msl <= 1010.0 else "#057a55")
-        else:
-            status_txt = "通信障害"
-            status_color = "#6b7280"
-        
-        rows_html += f'''
-        <tr style="{bg}">
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold;">{time_str}</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold; color:#1f2937; font-size:11px;">
-                海面: {p_msl}<br><span style="color:#057a55;">現地: {p_500m}</span>
-            </td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{weather_txt}</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold; font-size:12px; color:#9b1c1c;">
-                {t_500m}℃
-            </td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#1e429f; font-weight:bold;">{h_val}%</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#4b5563;">{r_val} <span style="font-size:10px;color:#9ca3af;">mm</span></td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:{status_color}; font-weight:bold; font-size:12px;">{status_txt}</td>
-        </tr>
-        '''
 
-    return f'''
+    for _, row in df.iterrows():
+        forecast_press = float(row["PressMSL"])
+
+        if data_error:
+            status = "参考値"
+            status_color = "#6b7280"
+            row_bg = ""
+        elif forecast_press <= 1005.0:
+            status = "🔴 警戒"
+            status_color = "#e02424"
+            row_bg = "background:#fff7f7;"
+        elif forecast_press <= 1010.0:
+            status = "⚠️ 注意"
+            status_color = "#b45309"
+            row_bg = "background:#fffdf6;"
+        else:
+            status = "正常"
+            status_color = "#057a55"
+            row_bg = ""
+
+        rows_html += f"""
+        <tr style="{row_bg}">
+            <td>{row["Time"].strftime("%H:%M")}</td>
+            <td>
+                <b class="local-value">{row["SurfacePress"]:.1f} hPa</b>
+                <small>天気予報: {row["PressMSL"]:.1f} hPa</small>
+            </td>
+            <td>{get_weather_string(row["Code"])}</td>
+            <td>
+                <b>{row["Temp"]:.1f}℃</b>
+                <small>麓: {row["CoastTemp"]:.1f}℃</small>
+            </td>
+            <td>{int(row["Humi"])}%</td>
+            <td>{row["Rain"]:.1f} mm</td>
+            <td style="color:{status_color};"><b>{status}</b></td>
+        </tr>
+        """
+
+    return f"""
     <!DOCTYPE html>
-    <html>
+    <html lang="ja">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Angel Forest Live Dashboard</title>
+        <title>奈良本 気象ダッシュボード</title>
         <style>
-            body {{ font-family: sans-serif; background:#f9fafb; margin:0; padding:12px; color:#111827; }}
-            .container {{ max-width: 540px; margin: 10px auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }}
-            .header {{ text-align: center; border-bottom: 1px solid #f3f4f6; padding-bottom: 14px; }}
-            .header h1 {{ font-size: 17px; margin: 0; color: #374151; }}
-            .current-box {{ background: #1f2937; color: white; padding: 16px 12px; border-radius: 12px; margin: 18px 0; }}
-            .grid-row {{ display: flex; justify-content: space-around; text-align: center; margin-bottom: 10px; }}
-            .grid-row:last-child {{ margin-bottom: 0; padding-top: 10px; border-top: 1px solid #374151; }}
-            .current-item {{ flex: 1; }}
-            .current-val {{ font-size: 14px; font-weight: bold; margin-top: 4px; }}
-            .current-label {{ font-size: 11px; color: #fbbf24; font-weight: bold; }}
-            .sub-label {{ font-size: 10px; color: #9ca3af; }}
-            .alert-banner {{ background: {alert_bg}; border: 1px solid {alert_border}; color: {alert_text}; padding: 14px; border-radius: 10px; font-size: 13px; line-height: 1.6; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 12px; }}
-            th {{ background: #f9fafb; color: #4b5563; padding: 12px 6px; border-bottom: 2px solid #e5e7eb; font-size: 11px; }}
+            * {{
+                box-sizing: border-box;
+            }}
+
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+                background: #f5f7fa;
+                color: #1f2937;
+                margin: 0;
+                padding: 12px;
+            }}
+
+            .container {{
+                max-width: 620px;
+                margin: 12px auto;
+                background: #ffffff;
+                padding: 20px;
+                border-radius: 18px;
+                box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
+            }}
+
+            .header {{
+                text-align: center;
+                padding-bottom: 14px;
+                border-bottom: 1px solid #e5e7eb;
+            }}
+
+            .header h1 {{
+                margin: 0;
+                font-size: 19px;
+            }}
+
+            .header p {{
+                color: #6b7280;
+                font-size: 12px;
+                margin: 6px 0 0;
+            }}
+
+            .current-box {{
+                background: #1f2937;
+                color: #ffffff;
+                border-radius: 14px;
+                margin: 18px 0;
+                padding: 18px 14px;
+            }}
+
+            .current-main {{
+                text-align: center;
+                padding-bottom: 14px;
+                margin-bottom: 14px;
+                border-bottom: 1px solid #374151;
+            }}
+
+            .label {{
+                color: #cbd5e1;
+                font-size: 11px;
+            }}
+
+            .current-pressure {{
+                color: #fbbf24;
+                font-size: 30px;
+                font-weight: 700;
+                margin-top: 4px;
+            }}
+
+            .forecast-pressure {{
+                color: #9ca3af;
+                font-size: 11px;
+                margin-top: 7px;
+            }}
+
+            .metrics {{
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 14px 8px;
+                text-align: center;
+            }}
+
+            .metric-label {{
+                color: #9ca3af;
+                font-size: 10px;
+            }}
+
+            .metric-value {{
+                font-size: 14px;
+                font-weight: 700;
+                margin-top: 4px;
+            }}
+
+            .alert-banner {{
+                background: {alert_bg};
+                border: 1px solid {alert_border};
+                color: {alert_text};
+                padding: 14px;
+                border-radius: 10px;
+                font-size: 13px;
+                line-height: 1.6;
+            }}
+
+            .table-wrap {{
+                overflow-x: auto;
+                margin-top: 24px;
+            }}
+
+            table {{
+                width: 100%;
+                min-width: 590px;
+                border-collapse: collapse;
+                font-size: 12px;
+            }}
+
+            th {{
+                background: #f9fafb;
+                color: #4b5563;
+                padding: 12px 7px;
+                border-bottom: 2px solid #e5e7eb;
+                white-space: nowrap;
+            }}
+
+            td {{
+                padding: 12px 7px;
+                border-bottom: 1px solid #f3f4f6;
+                text-align: center;
+                white-space: nowrap;
+            }}
+
+            td small {{
+                display: block;
+                color: #6b7280;
+                font-size: 10px;
+                font-weight: normal;
+                margin-top: 3px;
+            }}
+
+            .local-value {{
+                color: #047857;
+                font-size: 13px;
+            }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1>エンジェルフォレスト伊豆熱川 (標高500m)</h1>
-            </div>
-            
-            <div class="current-box">
-                <!-- 1段目: 広域基準（海面更正） -->
-                <div class="grid-row">
-                    <div class="current-item" style="color: #fca5a5;"><div class="current-label">海面更正（天気予報基準）</div></div>
-                    <div class="current-item"><div class="sub-label">換算気圧</div><div class="current-val">{current_press_msl} hPa</div></div>
-                    <div class="current-item" style="display:flex; flex-direction:column; justify-content:center; border-left:1px solid #374151;">
-                        <div class="sub-label">天気</div><div class="current-val" style="font-size:15px;">{current_weather}</div>
-                    </div>
-                </div>
-                <!-- 2段目: 現地（標高500m） -->
-                <div class="grid-row">
-                    <div class="current-item" style="color: #93c5fd;"><div class="current-label" style="color:#60a5fa;">現地（標高500m実態）</div></div>
-                    <div class="current-item"><div class="sub-label">地表気圧</div><div class="current-val" style="color:#fbbf24;">{current_press_500m} hPa</div></div>
-                    <div class="current-item"><div class="sub-label">気温</div><div class="current-val" style="color:#f87171;">{current_temp_500m}℃</div></div>
-<div class="current-item">
-    <div class="sub-label">湿度</div>
-    <div class="current-val" style="color:#60a5fa;">
-        {current_humi}%
-    </div>
-</div>
-                    <div class="current-item" style="display:flex; flex-direction:column; justify-content:center; border-left:1px solid #374151;">
-                        <div class="sub-label">降水量</div><div class="current-val" style="color:#34d399;">{current_rain}mm</div>
-                    </div>
-                </div>
+                <h1>奈良本の気象ダッシュボード</h1>
+                <p>現地：標高500m ／ 麓：海岸・国道135号周辺</p>
             </div>
 
+            <div class="current-box">
+                <div class="current-main">
+                    <div class="label">現在の気圧</div>
+                    <div class="current-pressure">{current_press:.1f} hPa</div>
+                    <div class="forecast-pressure">
+                        天気予報の気圧　{current_forecast_press:.1f} hPa
+                    </div>
+                </div>
+
+                <div class="metrics">
+                    <div>
+                        <div class="metric-label">天気</div>
+                        <div class="metric-value">{current_weather}</div>
+                    </div>
+                    <div>
+                        <div class="metric-label">現地の気温</div>
+                        <div class="metric-value" style="color:#fca5a5;">
+                            {current_temp:.1f}℃
+                        </div>
+                    </div>
+                    <div>
+                        <div class="metric-label">麓の気温</div>
+                        <div class="metric-value" style="color:#93c5fd;">
+                            {current_coast_temp:.1f}℃
+                        </div>
+                    </div>
+                    <div>
+                        <div class="metric-label">湿度</div>
+                        <div class="metric-value" style="color:#93c5fd;">
+                            {current_humi}%
+                        </div>
+                    </div>
+                    <div>
+                        <div class="metric-label">降水量</div>
+                        <div class="metric-value" style="color:#6ee7b7;">
+                            {current_rain:.1f} mm
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div class="alert-banner">{message}</div>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>時間</th>
-                        <th>気圧</th>
-                        <th>天気</th>
-                        <th>気温</th>
-                        <th>湿度</th>
-                        <th>雨量</th>
-                        <th>状況</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows_html}
-                </tbody>
-            </table>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>時間</th>
+                            <th>現地の気圧</th>
+                            <th>天気</th>
+                            <th>気温</th>
+                            <th>湿度</th>
+                            <th>雨量</th>
+                            <th>状況</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </body>
     </html>
-    '''
+    """
+
+
 port = int(os.environ.get("PORT", 5000))
 wsgi_app = app.wsgi_app
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port)
+```
