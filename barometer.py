@@ -2758,8 +2758,8 @@ body {
         🌦️ 24時間の天気
     </div>
 
-    <div class="note">
-        奈良本・標高約500m地点の予報
+    <div class="note forecast-note">
+    奈良本・標高約500m地点の予報
     </div>
 
 
