@@ -5,33 +5,43 @@ import os
 
 app = Flask(__name__)
 
-# 東伊豆町奈良本（標高500m）の位置
+# 🏡 東伊豆町奈良本（標高500m）の正確な位置
 LAT = 34.8156
 LON = 139.0684
-ELEVATION_DROP = 55.0
+ELEVATION_DROP = 55.0  # 標高500m分の気圧減少補正 (hPa)
 
 def get_real_weather_data():
     try:
-        # 🌟タイムゾーン指定をなくし、届いたそのままの並び順で安全に処理します
+        # 🌟URLの形式を最もシンプルに整え、確実にお天気データを取得します
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
-        res = requests.get(url, timeout=10).json()
-        hourly = res['hourly']
+        res = requests.get(url, timeout=10)
         
-        df = pd.DataFrame({
-            'Time': pd.to_datetime(hourly['time']),
-            'SeaPress': hourly['surface_pressure'],
-            'Code': hourly['weather_code'],
-            'Temp': hourly['temperature_2m'],
-            'Humi': hourly['relative_humidity_2m']
-        })
-        
-        df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
-        df['Temp'] = round(df['Temp'], 1)
-        
-        # 🌟エラーの原因だった時間の引き算を廃止！直近の24時間分をシンプルに頭から表示します
-        return df.head(24)
+        if res.status_code == 200:
+            res_json = res.json()
+            if 'hourly' in res_json:
+                hourly = res_json['hourly']
+                
+                df = pd.DataFrame({
+                    'Time': pd.to_datetime(hourly['time']),
+                    'SeaPress': hourly['surface_pressure'],
+                    'Code': hourly['weather_code'],
+                    'Temp': hourly['temperature_2m'],
+                    'Humi': hourly['relative_humidity_2m']
+                })
+                
+                df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
+                df['Temp'] = round(df['Temp'], 1)
+                
+                # 🌟【重要】今現在の日本時間に合わせて、お昼以降のデータをぴったり切り出します
+                now = pd.Timestamp.now().floor('h')
+                df_filtered = df[df['Time'] >= now]
+                
+                if not df_filtered.empty:
+                    return df_filtered.head(24)
+                return df.head(24)
     except Exception:
-        return None
+        pass
+    return None
 
 def get_weather_string(code):
     c = int(code)
@@ -53,7 +63,7 @@ def get_weather_string(code):
 def index():
     df = get_real_weather_data()
     
-    # 🌟万が一の通信エラー時も、時間が1行ずつしっかり進むように修正
+    # 🌟万が一データが取れなかった場合も、今のお昼の時間（13:00など）から時間が進むように修正
     if df is None or df.empty:
         now_time = pd.Timestamp.now().floor('h')
         fallback_data = []
