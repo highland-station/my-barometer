@@ -129,23 +129,28 @@ def get_weather_string(code):
 
     data_error = highland_fallback or coast_fallback
 
-    # 安全なマージ処理
+    # 時間のズレを救済してマージ
     coast_temp = coast_df[["Time", "Temp"]].rename(
         columns={"Temp": "CoastTemp"}
     )
-    df = highland_df.merge(coast_temp, on="Time", how="left")
+    df = highland_df.merge(coast_temp, on="Time", how="outer")
+    
+    df = df.sort_values("Time").ffill().bfill()
     df["CoastTemp"] = df["CoastTemp"].fillna(df["Temp"])
 
-    # 🌟 バグ修正：iloc の後ろに [0] を正確に追加
-    current = df.iloc[0]
-
-    current_press = current["SurfacePress"]
-    current_forecast_press = current["PressMSL"]
-    current_weather = get_weather_string(current["Code"])
-    current_temp = current["Temp"]
-    current_coast_temp = current["CoastTemp"]
-    current_humi = current["Humi"]
-    current_rain = current["Rain"]
+    if not df.empty:
+        current = df.iloc[0]
+        current_press = current["SurfacePress"]
+        current_forecast_press = current["PressMSL"]
+        current_weather = get_weather_string(current["Code"])
+        current_temp = current["Temp"]
+        current_coast_temp = current["CoastTemp"]
+        current_humi = current["Humi"]
+        current_rain = current["Rain"]
+    else:
+        current_press, current_forecast_press = 955.0, 1013.0
+        current_weather, current_temp, current_coast_temp = "☁️ くもり", 20.0, 23.0
+        current_humi, current_rain = 70, 0.0
 
     if data_error:
         alert_bg = "#fffaf0"
@@ -202,6 +207,7 @@ def get_weather_string(code):
             status_color = "#057a55"
             row_bg = ""
 
+        # 🌟 テーブル内の気温から「麓:」表記を削除し「現地 / 麓」の数値のみにスッキリ変更
         rows_html += f"""
         <tr style="{row_bg}">
             <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">{row["Time"].strftime("%H:%M")}</td>
@@ -212,7 +218,7 @@ def get_weather_string(code):
             <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">{get_weather_string(row["Code"])}</td>
             <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">
                 <b style="color:#1f2937; display:block;">{row["Temp"]:.1f}℃</b>
-                <span style="color:#6b7280; font-size:11px;">(麓: {row["CoastTemp"]:.1f}℃)</span>
+                <span style="color:#6b7280; font-size:11px;">/ {row["CoastTemp"]:.1f}℃</span>
             </td>
             <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">{int(row["Humi"])}%</td>
             <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">{row["Rain"]:.1f} mm</td>
@@ -220,7 +226,6 @@ def get_weather_string(code):
         </tr>
         """
 
-    # 🌟 HTMLテンプレートの波括弧をすべてエスケープし、デザインを最適化
     return f"""
     <!DOCTYPE html>
     <html lang="ja">
@@ -262,11 +267,11 @@ def get_weather_string(code):
                     </div>
                     <div class="grid-item">
                         <div class="label">現在の天気</div>
-                        <div class="current-val">{current_weather}</div>
-                    </div>
-                    <div class="grid-item">
-                        <div class="label">気温 (現地/麓)</div>
 
+{current_weather}
+
+
+気温 (現地/麓)
 {current_temp:.1f}℃
 麓: {current_coast_temp:.1f}℃
 
