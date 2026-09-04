@@ -1862,44 +1862,38 @@ body {
     font-size: 13px;
 }
 
-
 /* =========================================================
    1時間ごとの天気
    ========================================================= */
 
 .hourly {
-
     border-top: 1px solid #393234;
-
     border-bottom: 1px solid #393234;
-
     overflow: hidden;
 }
 
 .hour-row {
-
     display: grid;
-
     grid-template-columns:
+        72px
+        82px
+        minmax(90px, 1fr)
         70px
-        58px
-        1fr
-        70px
-        90px
-        90px
-        100px;
+        78px
+        105px
+        105px;
 
     align-items: center;
 
-    min-height: 64px;
+    min-height: 58px;
 
     border-bottom: 1px solid #302a2c;
 
-    gap: 8px;
+    gap: 5px;
 
-    padding: 7px 4px;
+    padding: 6px 4px;
 
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .hour-row:last-child {
@@ -1907,60 +1901,162 @@ body {
 }
 
 .hour-row.header-row {
-
-    min-height: 42px;
+    min-height: 36px;
 
     color: #81797b;
 
-    font-size: 11px;
+    font-size: 10px;
 
-    letter-spacing: .05em;
+    letter-spacing: .04em;
 }
 
 .hour-time {
-
-    font-size: 15px;
-
+    font-size: 13px;
     color: #d6ced0;
+    text-align: center;
 }
 
 .hour-icon {
-
-    font-size: 23px;
-
+    font-size: 21px;
+    line-height: 1.1;
     text-align: center;
 }
 
 .hour-weather {
     color: #d4cccd;
+    line-height: 1.4;
 }
+
+/* 天気名 */
+.hour-weather-name {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    color: #aaa1a3;
+}
+
+/* 状況 */
+.hour-condition {
+    color: #b9b0b2;
+    font-size: 11px;
+}
+
+/* ---------------------------------------------------------
+   気温
+   --------------------------------------------------------- */
 
 .hour-temp {
     text-align: right;
+    font-weight: 600;
 }
+
+/* 5℃未満：濃い青 */
+.temp-under-5 {
+    color: #557fa8;
+}
+
+/* 5〜9.9℃：青 */
+.temp-5-9 {
+    color: #78a7cf;
+}
+
+/* 10〜14.9℃：水色 */
+.temp-10-14 {
+    color: #91bfdc;
+}
+
+/* 15〜19.9℃：淡い水色 */
+.temp-15-19 {
+    color: #b4cdd9;
+}
+
+/* 20〜24.9℃：白〜薄グレー */
+.temp-20-24 {
+    color: #eee8e8;
+}
+
+/* 25〜29.9℃：オレンジ */
+.temp-25-29 {
+    color: #d69a68;
+}
+
+/* 30〜34.9℃：赤 */
+.temp-30-34 {
+    color: #d36f76;
+}
+
+/* 35℃以上：濃い赤 */
+.temp-35-plus {
+    color: #b84c58;
+    font-weight: 700;
+}
+
+/* ---------------------------------------------------------
+   降水量
+   --------------------------------------------------------- */
 
 .hour-rain {
     text-align: right;
+    color: #82afd1;
 }
+
+.hour-rain.rain-heavy {
+    color: #6f9fc5;
+    font-weight: 600;
+}
+
+.hour-rain.rain-none {
+    color: #625b5d;
+}
+
+/* ---------------------------------------------------------
+   気圧
+   --------------------------------------------------------- */
 
 .hour-pressure {
     text-align: right;
     color: #aaa1a3;
+    line-height: 1.4;
 }
 
-.travel-status {
+.pressure-number {
+    display: block;
+}
 
+.pressure-change {
+    display: block;
+    margin-top: 2px;
+    font-size: 9px;
+    color: #81797b;
+}
+
+.pressure-change.fall,
+.pressure-change.rise {
+    color: #9c8589;
+}
+
+.pressure-change.strong {
+    color: #d6a0a5;
+    font-weight: 600;
+}
+
+/* ---------------------------------------------------------
+   麓への移動
+   --------------------------------------------------------- */
+
+.travel-status {
     text-align: center;
 
-    font-size: 11px;
+    font-size: 10px;
 
     border-radius: 999px;
 
-    padding: 5px 7px;
+    padding: 5px 6px;
+
+    white-space: nowrap;
 }
 
 .travel-good {
-
     color: #a9b0a8;
 
     background: rgba(
@@ -1972,7 +2068,6 @@ body {
 }
 
 .travel-attention {
-
     color: #d0a995;
 
     background: rgba(
@@ -1984,7 +2079,6 @@ body {
 }
 
 .travel-danger {
-
     color: #e0a3a9;
 
     background: rgba(
@@ -1998,14 +2092,11 @@ body {
 }
 
 .health-attention {
-
     color: #e0a3a9;
-
     font-weight: 600;
 }
 
 .row-attention {
-
     background:
         linear-gradient(
             90deg,
@@ -2015,7 +2106,6 @@ body {
 }
 
 .row-danger {
-
     background:
         linear-gradient(
             90deg,
@@ -2033,7 +2123,6 @@ body {
    ========================================================= */
 
 .chart-box {
-
     background: #211d1e;
 
     border: 1px solid #332d2f;
@@ -2050,14 +2139,11 @@ body {
 }
 
 .chart-box canvas {
-
     width: 100% !important;
-
     height: 100% !important;
 }
 
 .chart-explanation {
-
     margin-top: 10px;
 
     color: #81797b;
@@ -2065,71 +2151,6 @@ body {
     font-size: 11px;
 
     line-height: 1.7;
-}
-
-.legend-note {
-
-    display: flex;
-
-    gap: 18px;
-
-    flex-wrap: wrap;
-
-    margin-top: 10px;
-
-    color: #91888a;
-
-    font-size: 11px;
-}
-
-.legend-item {
-
-    display: flex;
-
-    align-items: center;
-
-    gap: 6px;
-}
-
-.legend-dot {
-
-    width: 9px;
-
-    height: 9px;
-
-    border-radius: 50%;
-
-    background: #8d6b70;
-}
-
-.legend-dot.strong {
-    background: #b87880;
-}
-
-.legend-dot.rise {
-    background: #706e86;
-}
-
-.error {
-
-    color: #b8878d;
-
-    font-size: 12px;
-
-    padding: 10px 0;
-}
-
-.footer {
-
-    margin-top: 35px;
-
-    padding-top: 18px;
-
-    border-top: 1px solid #393234;
-
-    color: #70696b;
-
-    font-size: 11px;
 }
 
 
@@ -2140,11 +2161,10 @@ body {
 @media (max-width: 800px) {
 
     body {
-        padding: 18px;
+        padding: 14px;
     }
 
     .metrics {
-
         grid-template-columns:
             repeat(2, minmax(0, 1fr));
     }
@@ -2157,14 +2177,83 @@ body {
         font-size: 46px;
     }
 
+    /*
+       横スクロールさせず、
+       画面内に7項目を収める
+    */
+
     .hourly {
-        overflow-x: auto;
+        width: 100%;
+        overflow: hidden;
     }
 
     .hour-row {
+        grid-template-columns:
+            42px
+            45px
+            minmax(52px, 1fr)
+            48px
+            52px
+            72px
+            65px;
 
-        min-width: 680px;
+        gap: 2px;
+
+        padding: 5px 2px;
+
+        min-height: 55px;
+
+        font-size: 9px;
     }
+
+    .hour-row.header-row {
+        min-height: 32px;
+        font-size: 8px;
+    }
+
+    .hour-time {
+        font-size: 10px;
+    }
+
+    .hour-icon {
+        font-size: 17px;
+    }
+
+    .hour-weather-name {
+        font-size: 8px;
+    }
+
+    .hour-condition {
+        font-size: 8px;
+    }
+
+    .hour-rain {
+        font-size: 9px;
+    }
+
+    .hour-pressure {
+        font-size: 8px;
+    }
+
+    .pressure-change {
+        font-size: 7px;
+    }
+
+    .travel-status {
+        padding: 4px 2px;
+        font-size: 7px;
+    }
+
+    .chart-box {
+        height: 330px;
+        padding: 10px;
+    }
+
+    .chart-box.pressure-chart-box {
+        height: 350px;
+    }
+}
+
 
     .chart-box {
 
