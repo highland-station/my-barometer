@@ -12,8 +12,10 @@ ELEVATION_DROP = 55.0
 
 def get_real_weather_data():
     try:
+        # 🌟サーバーからの通信ブロックを防ぐため、安全なUser-Agentヘッダーを追加します
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
-        res = requests.get(url, timeout=10)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=10)
         
         if res.status_code == 200:
             res_json = res.json()
@@ -31,17 +33,14 @@ def get_real_weather_data():
                 df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
                 df['Temp'] = round(df['Temp'], 1)
                 
-                # 🌟【ここを修正！】世界標準時に「9時間」を足して、サーバーの時間を日本の時間に強制一致させます！
                 now = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
-                
-                # 日本の時間に変換したタイムテーブルから、今現在の時間以降を切り出す
                 df_filtered = df[df['Time'] >= now]
                 
                 if not df_filtered.empty:
                     return df_filtered.head(24)
                 return df.head(24)
-    except Exception:
-        pass
+    except Exception as e:
+        print("Error:", e)
     return None
 
 def get_weather_string(code):
@@ -64,7 +63,6 @@ def get_weather_string(code):
 def index():
     df = get_real_weather_data()
     
-    # 🌟万が一の通信エラー時も、時差を考慮してお昼の時間から進むように修正
     if df is None or df.empty:
         now_time = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
         fallback_data = []
@@ -75,7 +73,7 @@ def index():
             })
         df = pd.DataFrame(fallback_data)
     
-    current_row = df.iloc[0]
+    current_row = df.iloc
     current_press = current_row['Press']
     current_weather = get_weather_string(current_row['Code'])
     current_temp = current_row['Temp']
@@ -85,7 +83,7 @@ def index():
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
-        message = f"<b>🔴 【気圧警戒】現在 {current_press} hPa まで気圧が低下しています！</b><br>頭痛のリスクが高い時間帯です。お部屋を暗くして、ワンちゃんと一緒にのんびり過ごしてください。"
+        message = f"<b>🔴 【気圧警戒】現在 {current_press} hPa まで気圧が低下しています！</b><br>頭痛 reloj の高い時間帯です。お部屋を暗くして、ワンちゃんと一緒にのんびり過ごしてください。"
     elif current_press <= 940.0:
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
