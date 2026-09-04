@@ -57,10 +57,11 @@ def weather_text(code):
 
 
 # =========================
-# 気圧アラート
+# 気圧状態
 # =========================
 
 def pressure_status(pressure):
+
     pressure = float(pressure)
 
     if pressure <= 1005:
@@ -73,7 +74,7 @@ def pressure_status(pressure):
 
 
 # =========================
-# Open-Meteo取得
+# Open-Meteo
 # =========================
 
 def get_weather(latitude, longitude):
@@ -95,7 +96,12 @@ def get_weather(latitude, longitude):
         "forecast_days": 2,
     }
 
-    response = requests.get(url, params=params, timeout=15)
+    response = requests.get(
+        url,
+        params=params,
+        timeout=15
+    )
+
     response.raise_for_status()
 
     data = response.json()
@@ -118,7 +124,7 @@ def get_weather(latitude, longitude):
 
 
 # =========================
-# 24時間分を取得
+# 24時間取得
 # =========================
 
 def get_24_hours():
@@ -133,17 +139,23 @@ def get_24_hours():
         COAST_LON
     )
 
-    # 現在時刻以降の24時間
-    now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None)
+    now = pd.Timestamp.now(
+        tz="Asia/Tokyo"
+    ).tz_localize(None)
 
-    highland = highland[highland["Time"] >= now].head(24)
-    coast = coast[coast["Time"] >= now].head(24)
+    highland = highland[
+        highland["Time"] >= now
+    ].head(24)
+
+    coast = coast[
+        coast["Time"] >= now
+    ].head(24)
 
     return highland, coast
 
 
 # =========================
-# メイン画面
+# メイン
 # =========================
 
 @app.route("/")
@@ -154,17 +166,35 @@ def index():
         highland, coast = get_24_hours()
 
         if len(highland) == 0:
-            raise Exception("予報データがありません")
+            raise Exception(
+                "予報データがありません"
+            )
+
+        # =====================
+        # 現在値
+        # =====================
 
         current = highland.iloc[0]
-        current_coast = coast.iloc[0]
 
-        current_press = float(current["SurfacePress"])
-        current_msl_press = float(current["PressMSL"])
+        current_press = float(
+            current["SurfacePress"]
+        )
 
-        current_temp = float(current["Temp"])
-        current_humidity = float(current["Humidity"])
-        current_precip = float(current["Precip"])
+        current_msl_press = float(
+            current["PressMSL"]
+        )
+
+        current_temp = float(
+            current["Temp"]
+        )
+
+        current_humidity = float(
+            current["Humidity"]
+        )
+
+        current_precip = float(
+            current["Precip"]
+        )
 
         current_weather = weather_text(
             current["WeatherCode"]
@@ -174,13 +204,16 @@ def index():
             current_msl_press
         )
 
-        # =========================
+
+        # =====================
         # 24時間カード
-        # =========================
+        # =====================
 
         forecast_cards = ""
 
-        for i in range(min(24, len(highland))):
+        for i in range(
+            min(24, len(highland))
+        ):
 
             row = highland.iloc[i]
 
@@ -189,7 +222,9 @@ def index():
             else:
                 coast_row = coast.iloc[-1]
 
-            time_text = row["Time"].strftime("%m/%d %H:%M")
+            time_text = row[
+                "Time"
+            ].strftime("%m/%d %H:%M")
 
             weather = weather_text(
                 row["WeatherCode"]
@@ -203,9 +238,17 @@ def index():
                 row["PressMSL"]
             )
 
-            temp = float(row["Temp"])
-            humidity = float(row["Humidity"])
-            precip = float(row["Precip"])
+            temp = float(
+                row["Temp"]
+            )
+
+            humidity = float(
+                row["Humidity"]
+            )
+
+            precip = float(
+                row["Precip"]
+            )
 
             coast_temp = float(
                 coast_row["Temp"]
@@ -215,7 +258,9 @@ def index():
                 msl_press
             )
 
+
             forecast_cards += f"""
+
             <div class="forecast-card">
 
                 <div class="forecast-time">
@@ -228,34 +273,49 @@ def index():
 
                 <div class="forecast-row">
                     <span>🌡️ 気温</span>
-                    <strong>{temp:.1f}℃</strong>
+                    <strong>
+                        {temp:.1f}℃
+                    </strong>
                 </div>
 
                 <div class="forecast-row small-row">
                     <span>麓</span>
-                    <span>{coast_temp:.1f}℃</span>
-                </div>
-
-                <div class="forecast-row">
-                    <span>💧 湿度</span>
-                    <strong>{humidity:.0f}%</strong>
-                </div>
-
-                <div class="forecast-pressure">
-                    <div>
-                        気圧
-                    </div>
-                    <strong>
-                        {surface_press:.1f} hPa
-                    </strong>
                     <span>
-                        {msl_press:.1f} hPa
+                        {coast_temp:.1f}℃
                     </span>
                 </div>
 
                 <div class="forecast-row">
+                    <span>💧 湿度</span>
+                    <strong>
+                        {humidity:.0f}%
+                    </strong>
+                </div>
+
+                <div class="forecast-pressure">
+
+                    <div>
+                        気圧
+                    </div>
+
+                    <strong>
+                        {surface_press:.1f} hPa
+                    </strong>
+
+                    <span>
+                        {msl_press:.1f} hPa
+                    </span>
+
+                </div>
+
+                <div class="forecast-row">
+
                     <span>🌧️ 降水</span>
-                    <strong>{precip:.1f} mm</strong>
+
+                    <strong>
+                        {precip:.1f} mm
+                    </strong>
+
                 </div>
 
                 <div class="forecast-status {status_cls}">
@@ -263,13 +323,16 @@ def index():
                 </div>
 
             </div>
+
             """
 
-        # =========================
+
+        # =====================
         # HTML
-        # =========================
+        # =====================
 
         html = f"""
+
 <!DOCTYPE html>
 
 <html lang="ja">
@@ -283,7 +346,12 @@ def index():
 
 <title>伊豆熱川 気圧・天気</title>
 
+
 <style>
+
+/* =========================
+   基本
+   ========================= */
 
 * {{
     box-sizing: border-box;
@@ -297,6 +365,7 @@ body {{
 }}
 
 body {{
+
     font-family:
         -apple-system,
         BlinkMacSystemFont,
@@ -304,43 +373,59 @@ body {{
         "Noto Sans JP",
         sans-serif;
 
-    background: #f3f5f7;
-    color: #222;
+    background: #fff8fa;
+
+    color: #3d2630;
 
     overflow-x: hidden;
 }}
+
 
 /* =========================
    全体
    ========================= */
 
 .container {{
+
     width: 100%;
+
     max-width: 1600px;
 
     margin: 0 auto;
 
-    padding: 24px 30px 40px;
+    padding:
+        24px
+        30px
+        40px;
 }}
 
+
 /* =========================
-   現在の状況
+   現在状況
    ========================= */
 
 .current-box {{
-    background: white;
 
-    border-radius: 18px;
+    background: #FF4F9A;
+
+    border-radius: 20px;
 
     padding: 28px;
 
     box-shadow:
-        0 3px 12px rgba(0,0,0,0.08);
+        0 5px 18px rgba(
+            255,
+            79,
+            154,
+            0.28
+        );
 
-    margin-bottom: 28px;
+    margin-bottom: 30px;
 }}
 
+
 .current-grid {{
+
     display: grid;
 
     grid-template-columns:
@@ -350,11 +435,18 @@ body {{
         1fr
         1fr;
 
-    gap: 18px;
+    gap: 16px;
 }}
 
+
 .current-item {{
-    background: #f7f8fa;
+
+    background: rgba(
+        255,
+        255,
+        255,
+        0.88
+    );
 
     border-radius: 14px;
 
@@ -365,44 +457,72 @@ body {{
     min-height: 125px;
 
     display: flex;
+
     flex-direction: column;
+
     justify-content: center;
 }}
 
+
 .current-item.main-pressure {{
-    background: #eef5ff;
+
+    background: rgba(
+        255,
+        255,
+        255,
+        0.96
+    );
 }}
 
+
 .label {{
+
     font-size: 15px;
-    color: #666;
+
+    color: #9b315f;
 
     margin-bottom: 8px;
 }}
 
+
 .current-val {{
+
     font-size: 28px;
+
     font-weight: 700;
 
     line-height: 1.35;
+
+    color: #3d2630;
 }}
 
+
 .small-current {{
+
     font-size: 17px;
-    color: #666;
+
+    color: #9b315f;
+
     font-weight: 500;
 }}
 
+
 .weather-current {{
+
     font-size: 23px;
+
     font-weight: 700;
+
+    color: #3d2630;
 }}
+
 
 /* =========================
    アラート
    ========================= */
 
 .alert {{
+
     margin-top: 18px;
 
     padding: 12px 16px;
@@ -415,67 +535,112 @@ body {{
 }}
 
 .alert.normal {{
-    background: #edf8ef;
-    color: #287a3c;
+
+    background: #ffffff;
+
+    color: #c2185b;
 }}
 
 .alert.warning {{
-    background: #fff7df;
-    color: #996c00;
+
+    background: #fff3cd;
+
+    color: #8a6500;
 }}
 
 .alert.danger {{
-    background: #ffe9e9;
-    color: #b40000;
+
+    background: #ffe4e6;
+
+    color: #b00020;
 }}
 
+
 /* =========================
-   24時間予報
+   24時間エリア
    ========================= */
 
 .section-title {{
+
     font-size: 22px;
 
     font-weight: 700;
 
-    margin: 0 0 16px 4px;
+    color: #c2185b;
+
+    margin:
+        0
+        0
+        14px
+        4px;
 }}
 
-/* PCではカードを横並び */
 
 .forecast-grid {{
+
+    background: #FFF0F5;
+
+    border-radius: 20px;
+
+    padding: 18px;
+
     display: grid;
 
     grid-template-columns:
-        repeat(6, minmax(0, 1fr));
+        repeat(
+            6,
+            minmax(0, 1fr)
+        );
 
     gap: 12px;
 }}
 
+
+/* =========================
+   予報カード
+   ========================= */
+
 .forecast-card {{
-    background: white;
+
+    background: #ffffff;
 
     border-radius: 14px;
 
-    padding: 15px 13px;
+    padding:
+        15px
+        13px;
 
     box-shadow:
-        0 2px 8px rgba(0,0,0,0.07);
+        0 2px 8px rgba(
+            194,
+            24,
+            91,
+            0.08
+        );
 
     min-width: 0;
+
+    border:
+        1px solid #f8dce7;
 }}
 
+
 .forecast-time {{
+
     font-size: 15px;
 
     font-weight: 700;
 
     text-align: center;
 
+    color: #c2185b;
+
     margin-bottom: 10px;
 }}
 
+
 .forecast-weather {{
+
     text-align: center;
 
     font-size: 17px;
@@ -485,16 +650,21 @@ body {{
     min-height: 45px;
 
     display: flex;
+
     align-items: center;
+
     justify-content: center;
 
     margin-bottom: 8px;
 }}
 
+
 .forecast-row {{
+
     display: flex;
 
     justify-content: space-between;
+
     align-items: center;
 
     gap: 5px;
@@ -503,21 +673,31 @@ body {{
 
     padding: 5px 0;
 
-    border-top: 1px solid #eee;
+    border-top:
+        1px solid #f4e1e8;
 }}
+
 
 .forecast-row strong {{
+
     font-size: 14px;
+
+    color: #3d2630;
 }}
 
+
 .small-row {{
-    color: #777;
+
+    color: #a37b8c;
 
     font-size: 12px;
 }}
 
+
 .forecast-pressure {{
-    border-top: 1px solid #eee;
+
+    border-top:
+        1px solid #f4e1e8;
 
     margin-top: 3px;
 
@@ -527,30 +707,40 @@ body {{
 
     font-size: 12px;
 
-    color: #666;
+    color: #9b6b7d;
 }}
 
+
 .forecast-pressure strong {{
+
     display: block;
 
     font-size: 16px;
 
-    color: #222;
+    color: #3d2630;
 
     margin-top: 2px;
 }}
 
+
 .forecast-pressure span {{
+
     display: block;
 
     font-size: 12px;
 
-    color: #777;
+    color: #a37b8c;
 
     margin-top: 2px;
 }}
 
+
+/* =========================
+   ステータス
+   ========================= */
+
 .forecast-status {{
+
     margin-top: 8px;
 
     padding: 5px;
@@ -564,20 +754,30 @@ body {{
     font-weight: 700;
 }}
 
+
 .forecast-status.normal {{
-    background: #edf8ef;
-    color: #287a3c;
+
+    background: #fce7f0;
+
+    color: #c2185b;
 }}
+
 
 .forecast-status.warning {{
-    background: #fff7df;
-    color: #996c00;
+
+    background: #fff3cd;
+
+    color: #8a6500;
 }}
 
+
 .forecast-status.danger {{
-    background: #ffe9e9;
-    color: #b40000;
+
+    background: #ffe4e6;
+
+    color: #b00020;
 }}
+
 
 /* =========================
    タブレット
@@ -586,11 +786,16 @@ body {{
 @media (max-width: 1100px) {{
 
     .forecast-grid {{
+
         grid-template-columns:
-            repeat(4, minmax(0, 1fr));
+            repeat(
+                4,
+                minmax(0, 1fr)
+            );
     }}
 
     .current-grid {{
+
         grid-template-columns:
             repeat(3, 1fr);
     }}
@@ -604,65 +809,83 @@ body {{
 
 @media (max-width: 700px) {{
 
-    body {{
-        background: #f3f5f7;
-    }}
-
     .container {{
+
         padding:
             10px
             10px
             25px;
     }}
 
+
     /* 現在状況 */
 
     .current-box {{
+
         padding: 12px;
 
-        border-radius: 14px;
+        border-radius: 15px;
 
         margin-bottom: 18px;
     }}
 
+
     .current-grid {{
+
         grid-template-columns:
             repeat(2, 1fr);
 
         gap: 8px;
     }}
 
+
     .current-item {{
+
         min-height: 88px;
 
-        padding: 10px 6px;
+        padding:
+            10px
+            6px;
 
         border-radius: 11px;
     }}
 
+
     .current-item.main-pressure {{
-        grid-column: span 2;
+
+        grid-column:
+            span 2;
     }}
 
+
     .label {{
+
         font-size: 12px;
 
         margin-bottom: 4px;
     }}
 
+
     .current-val {{
+
         font-size: 21px;
     }}
 
+
     .small-current {{
+
         font-size: 13px;
     }}
 
+
     .weather-current {{
+
         font-size: 17px;
     }}
 
+
     .alert {{
+
         margin-top: 10px;
 
         padding: 9px;
@@ -670,25 +893,37 @@ body {{
         font-size: 13px;
     }}
 
+
     /* 24時間 */
 
     .section-title {{
+
         font-size: 18px;
 
         margin:
-            0 0 10px 2px;
+            0
+            0
+            10px
+            2px;
     }}
 
+
     .forecast-grid {{
+
+        padding: 10px;
+
+        border-radius: 15px;
+
         display: grid;
 
-        grid-template-columns:
-            1fr;
+        grid-template-columns: 1fr;
 
         gap: 8px;
     }}
 
+
     .forecast-card {{
+
         padding: 12px;
 
         border-radius: 12px;
@@ -705,8 +940,11 @@ body {{
         align-items: center;
     }}
 
+
     .forecast-time {{
-        grid-row: span 4;
+
+        grid-row:
+            span 4;
 
         font-size: 15px;
 
@@ -715,8 +953,11 @@ body {{
         text-align: center;
     }}
 
+
     .forecast-weather {{
-        grid-column: 2 / 4;
+
+        grid-column:
+            2 / 4;
 
         min-height: auto;
 
@@ -729,7 +970,9 @@ body {{
         margin-bottom: 3px;
     }}
 
+
     .forecast-row {{
+
         padding: 3px 0;
 
         border-top: none;
@@ -737,27 +980,37 @@ body {{
         font-size: 12px;
     }}
 
+
     .forecast-row strong {{
+
         font-size: 13px;
     }}
 
+
     .small-row {{
+
         display: none;
     }}
 
+
     .forecast-pressure {{
-        grid-column: 2 / 4;
+
+        grid-column:
+            2 / 4;
 
         text-align: left;
 
-        border-top: 1px solid #eee;
+        border-top:
+            1px solid #f4e1e8;
 
         margin-top: 3px;
 
         padding-top: 5px;
     }}
 
+
     .forecast-pressure strong {{
+
         display: inline;
 
         font-size: 14px;
@@ -765,14 +1018,19 @@ body {{
         margin-right: 5px;
     }}
 
+
     .forecast-pressure span {{
+
         display: inline;
 
         font-size: 11px;
     }}
 
+
     .forecast-status {{
-        grid-column: 2 / 4;
+
+        grid-column:
+            2 / 4;
 
         margin-top: 3px;
 
@@ -785,25 +1043,33 @@ body {{
 
 
 /* =========================
-   さらに小さいスマホ
+   小さいスマホ
    ========================= */
 
 @media (max-width: 380px) {{
 
     .container {{
+
         padding-left: 7px;
+
         padding-right: 7px;
     }}
 
+
     .current-box {{
+
         padding: 8px;
     }}
 
+
     .current-val {{
+
         font-size: 19px;
     }}
 
+
     .forecast-card {{
+
         grid-template-columns:
             72px
             1fr
@@ -814,7 +1080,9 @@ body {{
         padding: 10px;
     }}
 
+
     .forecast-time {{
+
         font-size: 13px;
     }}
 
@@ -824,15 +1092,19 @@ body {{
 
 </head>
 
+
 <body>
 
+
 <div class="container">
+
 
     <!-- 現在の状況 -->
 
     <div class="current-box">
 
         <div class="current-grid">
+
 
             <div class="current-item main-pressure">
 
@@ -841,12 +1113,17 @@ body {{
                 </div>
 
                 <div class="current-val">
+
                     {current_press:.1f} hPa
+
                     <br>
 
                     <span class="small-current">
+
                         {current_msl_press:.1f} hPa
+
                     </span>
+
                 </div>
 
             </div>
@@ -903,12 +1180,16 @@ body {{
 
             </div>
 
+
         </div>
 
 
         <div class="alert {status_class}">
+
             {status_text}
+
         </div>
+
 
     </div>
 
@@ -916,8 +1197,11 @@ body {{
     <!-- 24時間予報 -->
 
     <div class="section-title">
+
         今後24時間の予報
+
     </div>
+
 
     <div class="forecast-grid">
 
@@ -925,31 +1209,40 @@ body {{
 
     </div>
 
+
 </div>
+
 
 </body>
 
 </html>
+
 """
 
         return html
 
+
     except Exception as e:
 
         return f"""
+
         <h2>データ取得エラー</h2>
+
         <p>{str(e)}</p>
+
         """
 
 
 # =========================
-# Render用
+# Render
 # =========================
 
 if __name__ == "__main__":
 
+    import os
+
     port = int(
-        __import__("os").environ.get(
+        os.environ.get(
             "PORT",
             5000
         )
