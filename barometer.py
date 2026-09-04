@@ -289,6 +289,11 @@ def index():
                 font-weight: 700;
                 margin-top: 4px;
             }}
+            .forecast-pressure {
+                color: #9ca3af;
+                font-size: 11px;
+                margin-top: 7px;
+            }}
 
             .metrics {{
                 display: flex;
@@ -376,6 +381,9 @@ def index():
                 <div class="current-main">
                     <div class="label">気圧</div>
                     <div class="current-pressure">{current_press:.1f} hPa</div>
+                    <div class="forecast-pressure">
+                        天気予報の気圧　{current_forecast_press:.1f} hPa
+                    </div>
                 </div>
 
                 <div class="metrics">
