@@ -1,17 +1,14 @@
 from flask import Flask
 import requests
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 
-# =========================================================
-# 設定
-# =========================================================
-
-# 気象庁アメダス 稲取
+# 伊豆熱川の観測に使う稲取アメダス
 INATORI_ID = "50506"
 
-# キャッシュ
+# 10分間キャッシュ
 CACHE_SECONDS = 600
 
 cache = {
@@ -20,64 +17,13 @@ cache = {
 }
 
 
-# =========================================================
-# 天気コード
-# =========================================================
-
-def weather_text_from_jma(code):
-
-    if code is None:
-        return "☁️ くもり"
-
-    code = int(code)
-
-    if code == 0:
-        return "☀️ 快晴"
-    elif code == 1:
-        return "🌤️ 晴れ"
-    elif code == 2:
-        return "⛅ 晴れ"
-    elif code == 3:
-        return "☁️ くもり"
-    elif code in [45, 48]:
-        return "🌫️ 霧"
-    elif 51 <= code <= 67:
-        return "☔ 雨"
-    elif 71 <= code <= 77:
-        return "❄️ 雪"
-    elif 80 <= code <= 82:
-        return "☔ 雨"
-    elif code in [85, 86]:
-        return "❄️ 雪"
-    elif code in [95, 96, 99]:
-        return "⚡ 雷雨"
-
-    return "☁️ くもり"
-
-
-def pressure_status(pressure):
-
-    if pressure is None:
-        return "normal", "観測中"
-
-    if pressure <= 1005:
-        return "danger", "気圧低下"
-
-    if pressure <= 1010:
-        return "warning", "やや低め"
-
-    return "normal", "安定"
-
-
-# =========================================================
-# 気象庁アメダス
-# =========================================================
-
 def get_jma_observation():
 
-    now = datetime.now()
+    # RenderはUTCなので、日本時間に変換してからJMAデータを探す
+    now = datetime.now(ZoneInfo("Asia/Tokyo"))
 
-    # 最新の10分刻みデータを探す
+    # 最新の観測データを探す
+    # 10分刻みで最大60分前まで確認
     for back in range(0, 61, 10):
 
         target = now - timedelta(minutes=back)
@@ -99,7 +45,7 @@ def get_jma_observation():
 
             response = requests.get(
                 url,
-                timeout=8,
+                timeout=10,
                 headers={
                     "User-Agent": "IzuAtagawaWeather/1.0"
                 }
@@ -129,15 +75,11 @@ def get_jma_observation():
     return None
 
 
-# =========================================================
-# データ取得
-# =========================================================
-
 def get_weather():
 
     now = datetime.now().timestamp()
 
-    # キャッシュ
+    # キャッシュが有効ならそのまま使用
     if (
         cache["data"] is not None
         and now - cache["time"] < CACHE_SECONDS
@@ -161,113 +103,70 @@ def get_weather():
     return result
 
 
-# =========================================================
-# HTML
-# =========================================================
-
 @app.route("/")
 def index():
 
     try:
-
-        data = get_weather()
-
-        obs = data["observation"]
+        weather = get_weather()
+        obs = weather["observation"]
 
         temperature = obs["temperature"]
         humidity = obs["humidity"]
         precipitation = obs["precipitation"]
         pressure = obs["pressure"]
 
-        if temperature is None:
-            temperature_text = "--"
+        # 表示用
+        if temperature is not None:
+            temperature_text = f"{temperature:.1f} ℃"
         else:
-            temperature_text = f"{temperature:.1f}"
+            temperature_text = "-- ℃"
 
-        if humidity is None:
-            humidity_text = "--"
+        if humidity is not None:
+            humidity_text = f"{humidity:.0f} %"
         else:
-            humidity_text = f"{humidity:.0f}"
+            humidity_text = "-- %"
 
-        if precipitation is None:
-            precipitation_text = "--"
+        if precipitation is not None:
+            precipitation_text = f"{precipitation:.1f} mm"
         else:
-            precipitation_text = f"{precipitation:.1f}"
+            precipitation_text = "0.0 mm"
 
-        if pressure is None:
-            pressure_text = "--"
-            msl_pressure_text = "--"
+        if pressure is not None:
+            pressure_text = f"{pressure:.1f} hPa"
         else:
-            pressure_text = f"{pressure:.1f}"
-            msl_pressure_text = f"{pressure:.1f}"
+            pressure_text = "--.- hPa"
 
-        status_class, status_text = pressure_status(
-            pressure
-        )
+        # 観測時刻
+        time_text = "--"
 
-        # =================================================
-        # 24時間表示
-        # =================================================
+        if obs["time"]:
+            try:
+                dt = datetime.strptime(
+                    obs["time"],
+                    "%Y%m%d%H%M"
+                )
 
-        cards = ""
+                time_text = dt.strftime(
+                    "%Y/%m/%d %H:%M"
+                )
 
-        current_time = datetime.now()
+            except Exception:
+                time_text = obs["time"]
 
-        for i in range(24):
+        error_message = ""
 
-            card_time = current_time + timedelta(hours=i)
+    except Exception as e:
 
-            cards += f"""
-            <div class="hour-card">
+        temperature_text = "-- ℃"
+        humidity_text = "-- %"
+        precipitation_text = "-- mm"
+        pressure_text = "--.- hPa"
+        time_text = "--"
 
-                <div class="hour-time">
-                    {card_time.strftime("%-m/%-d %H:%M")}
-                </div>
+        error_message = str(e)
 
-                <div class="hour-status {status_class}">
-                    {status_text}
-                </div>
-
-                <div class="hour-weather">
-                    気象庁観測
-                </div>
-
-                <div class="hour-temp">
-                    {temperature_text}°
-                </div>
-
-                <div class="hour-info">
-                    湿度 {humidity_text}%
-                </div>
-
-                <div class="hour-info">
-                    降水 {precipitation_text} mm
-                </div>
-
-                <div class="hour-pressure">
-
-                    <span>気圧</span>
-
-                    <strong>
-                        {pressure_text}
-                    </strong>
-
-                    <strong>
-                        {msl_pressure_text}
-                    </strong>
-
-                    <small>
-                        hPa
-                    </small>
-
-                </div>
-
-            </div>
-            """
-
-        html = f"""
+    html = f"""
 <!DOCTYPE html>
-
 <html lang="ja">
 
 <head>
@@ -277,7 +176,7 @@ def index():
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>伊豆熱川 天気・気圧</title>
+<title>伊豆熱川 気象観測</title>
 
 <style>
 
@@ -292,148 +191,127 @@ body {{
     font-family:
         -apple-system,
         BlinkMacSystemFont,
-        "Helvetica Neue",
+        "Segoe UI",
         "Yu Gothic",
-        "Meiryo",
+        "Hiragino Kaku Gothic ProN",
         sans-serif;
 }}
 
 .container {{
-    width: min(96%, 1550px);
-    margin: auto;
-    padding: 30px 0 50px;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px;
 }}
 
-
-/* ===============================
-   現在
-================================ */
+.location {{
+    color: #704252;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+}}
 
 .current {{
     background: #A85D72;
     color: white;
-    border-radius: 28px;
-    padding: 34px;
-    box-shadow:
-        0 14px 35px rgba(70,45,52,.16);
-}}
-
-.location {{
-    font-size: 17px;
-    letter-spacing: .08em;
-    opacity: .9;
-}}
-
-.weather-main {{
-    display: flex;
-    align-items: center;
-    gap: 22px;
-    margin-top: 20px;
-}}
-
-.weather-icon {{
-    font-size: 62px;
-}}
-
-.temperature {{
-    font-size: 64px;
-    font-weight: 700;
-    line-height: 1;
-}}
-
-.weather-name {{
-    margin-top: 10px;
-    font-size: 18px;
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 20px;
 }}
 
 .current-top {{
     display: flex;
     justify-content: space-between;
-    gap: 30px;
+    align-items: center;
+    gap: 20px;
 }}
 
-.current-pressure {{
-    min-width: 220px;
-    background: rgba(255,255,255,.14);
-    border-radius: 20px;
-    padding: 22px;
-}}
-
-.pressure-label {{
+.current-label {{
     font-size: 14px;
-    opacity: .8;
+    opacity: 0.85;
+}}
+
+.temperature {{
+    font-size: 64px;
+    font-weight: 300;
+    line-height: 1.1;
+    margin-top: 8px;
+}}
+
+.weather-icon {{
+    font-size: 58px;
+}}
+
+.cards {{
+    display: grid;
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+}}
+
+.card {{
+    background: #FAFAF9;
+    border-radius: 16px;
+    padding: 20px;
+    min-width: 0;
+}}
+
+.card-label {{
+    color: #81777A;
+    font-size: 13px;
     margin-bottom: 8px;
 }}
 
-.pressure-number {{
-    font-size: 29px;
-    font-weight: 700;
-    line-height: 1.3;
+.card-value {{
+    font-size: 24px;
+    color: #704252;
+    font-weight: 500;
 }}
 
-.pressure-unit {{
-    font-size: 13px;
-    opacity: .75;
+.pressure {{
+    background: #FAFAF9;
+    border-radius: 18px;
+    padding: 24px;
+    margin-top: 20px;
 }}
 
-.current-info {{
-    display: grid;
-    grid-template-columns:
-        repeat(3,1fr);
-    gap: 14px;
-    margin-top: 30px;
+.pressure-title {{
+    font-size: 14px;
+    color: #81777A;
+    margin-bottom: 12px;
 }}
 
-.info-box {{
-    background: rgba(255,255,255,.12);
-    border-radius: 17px;
-    padding: 16px 18px;
+.pressure-value {{
+    font-size: 30px;
+    color: #704252;
 }}
-
-.info-label {{
-    font-size: 12px;
-    opacity: .75;
-}}
-
-.info-value {{
-    font-size: 22px;
-    font-weight: 600;
-    margin-top: 5px;
-}}
-
-
-/* ===============================
-   24時間
-================================ */
 
 .forecast {{
-    margin-top: 30px;
     background: #E7E3E2;
-    border-radius: 28px;
-    padding: 30px;
+    border-radius: 18px;
+    padding: 24px;
+    margin-top: 20px;
 }}
 
-.forecast-title {{
-    font-size: 22px;
-    font-weight: 700;
+.section-title {{
+    font-size: 18px;
     color: #704252;
-    margin-bottom: 22px;
+    margin-bottom: 18px;
 }}
 
-.hour-grid {{
+.forecast-grid {{
     display: grid;
     grid-template-columns:
-        repeat(6,minmax(0,1fr));
-    gap: 12px;
+        repeat(8, minmax(80px, 1fr));
+    gap: 8px;
+    overflow-x: auto;
 }}
 
-.hour-card {{
+.hour {{
     background: #FAFAF9;
-    border-radius: 17px;
-    padding: 15px;
-    min-width: 0;
-    box-shadow:
-        0 4px 12px rgba(60,50,50,.05);
+    border-radius: 12px;
+    padding: 12px 8px;
+    text-align: center;
 }}
 
 .hour-time {{
@@ -441,147 +319,58 @@ body {{
     color: #81777A;
 }}
 
-.hour-status {{
-    display: inline-block;
-    margin-top: 8px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 10px;
-}}
-
-.normal {{
-    background: #F5E8EC;
-    color: #704252;
-}}
-
-.warning {{
-    background: #F4E9C8;
-    color: #80691C;
-}}
-
-.danger {{
-    background: #F4DEDF;
-    color: #983C48;
-}}
-
-.hour-weather {{
-    margin-top: 13px;
-    font-size: 13px;
+.hour-icon {{
+    font-size: 25px;
+    margin: 8px 0;
 }}
 
 .hour-temp {{
-    margin-top: 8px;
-    font-size: 27px;
-    font-weight: 700;
+    font-size: 16px;
     color: #704252;
 }}
 
-.hour-info {{
-    margin-top: 7px;
-    font-size: 11px;
+.update {{
+    text-align: right;
     color: #81777A;
+    font-size: 12px;
+    margin-top: 16px;
 }}
 
-.hour-pressure {{
-    margin-top: 12px;
-    padding-top: 10px;
-    border-top: 1px solid #E5DFE0;
+.error {{
+    background: #F4DEDF;
     color: #704252;
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 20px;
 }}
-
-.hour-pressure span {{
-    display: block;
-    font-size: 10px;
-    color: #81777A;
-}}
-
-.hour-pressure strong {{
-    display: block;
-    font-size: 14px;
-}}
-
-.hour-pressure small {{
-    font-size: 9px;
-    color: #81777A;
-}}
-
-
-/* ===============================
-   タブレット
-================================ */
-
-@media (max-width: 1000px) {{
-
-    .hour-grid {{
-        grid-template-columns:
-            repeat(4,minmax(0,1fr));
-    }}
-
-}}
-
-
-/* ===============================
-   スマホ
-================================ */
 
 @media (max-width: 700px) {{
 
     .container {{
-        width: 94%;
-        padding-top: 15px;
+        padding: 14px;
     }}
 
     .current {{
-        padding: 24px;
-        border-radius: 22px;
-    }}
-
-    .current-top {{
-        display: block;
-    }}
-
-    .weather-icon {{
-        font-size: 48px;
+        padding: 22px;
     }}
 
     .temperature {{
         font-size: 48px;
     }}
 
-    .current-pressure {{
-        margin-top: 22px;
+    .weather-icon {{
+        font-size: 44px;
     }}
 
-    .current-info {{
+    .cards {{
         grid-template-columns:
-            repeat(2,1fr);
+            repeat(2, minmax(0, 1fr));
     }}
 
-    .forecast {{
-        padding: 20px;
-        border-radius: 22px;
-    }}
-
-    .hour-grid {{
+    .forecast-grid {{
         grid-template-columns:
-            repeat(2,minmax(0,1fr));
-    }}
-
-}}
-
-
-/* ===============================
-   小さいスマホ
-================================ */
-
-@media (max-width: 420px) {{
-
-    .current-info {{
-        grid-template-columns: 1fr;
-    }}
-
-    .hour-grid {{
-        grid-template-columns: 1fr;
+            repeat(8, 80px);
+        overflow-x: auto;
     }}
 
 }}
@@ -589,131 +378,167 @@ body {{
 </style>
 
 </head>
-
 
 <body>
 
 <div class="container">
 
-
-<section class="current">
-
-    <div class="current-top">
-
-        <div>
-
-            <div class="location">
-                伊豆熱川
-            </div>
-
-            <div class="weather-main">
-
-                <div class="weather-icon">
-                    🌤️
-                </div>
-
-                <div>
-
-                    <div class="temperature">
-                        {temperature_text}℃
-                    </div>
-
-                    <div class="weather-name">
-                        気象庁アメダス実測
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="current-pressure">
-
-            <div class="pressure-label">
-                気圧
-            </div>
-
-            <div class="pressure-number">
-                {pressure_text}
-                <span class="pressure-unit">
-                    hPa
-                </span>
-            </div>
-
-            <div class="pressure-number">
-                {msl_pressure_text}
-                <span class="pressure-unit">
-                    hPa
-                </span>
-            </div>
-
-        </div>
-
+    <div class="location">
+        伊豆熱川
     </div>
 
+    <section class="current">
 
-    <div class="current-info">
+        <div class="current-top">
 
-        <div class="info-box">
+            <div>
 
-            <div class="info-label">
+                <div class="current-label">
+                    現在の観測
+                </div>
+
+                <div class="temperature">
+                    {temperature_text}
+                </div>
+
+            </div>
+
+            <div class="weather-icon">
+                🌤️
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <div class="cards">
+
+        <div class="card">
+
+            <div class="card-label">
                 湿度
             </div>
 
-            <div class="info-value">
-                {humidity_text}%
+            <div class="card-value">
+                {humidity_text}
             </div>
 
         </div>
 
 
-        <div class="info-box">
+        <div class="card">
 
-            <div class="info-label">
+            <div class="card-label">
                 降水量
             </div>
 
-            <div class="info-value">
-                {precipitation_text} mm
+            <div class="card-value">
+                {precipitation_text}
             </div>
 
         </div>
 
 
-        <div class="info-box">
+        <div class="card">
 
-            <div class="info-label">
+            <div class="card-label">
                 観測地点
             </div>
 
-            <div class="info-value">
+            <div class="card-value">
                 稲取
             </div>
 
         </div>
 
+
+        <div class="card">
+
+            <div class="card-label">
+                観測時刻
+            </div>
+
+            <div class="card-value"
+                 style="font-size:18px;">
+                {time_text}
+            </div>
+
+        </div>
+
     </div>
 
-</section>
+
+    <section class="pressure">
+
+        <div class="pressure-title">
+            気圧
+        </div>
+
+        <div class="pressure-value">
+            {pressure_text}
+        </div>
+
+    </section>
 
 
-<section class="forecast">
+    <section class="forecast">
 
-    <div class="forecast-title">
-        これから24時間
+        <div class="section-title">
+            24時間
+        </div>
+
+        <div class="forecast-grid">
+"""
+
+    # 現在はJMA観測値を表示。
+    # 本物の24時間予報は次の段階で追加する。
+    for i in range(24):
+
+        hour = datetime.now(
+            ZoneInfo("Asia/Tokyo")
+        ) + timedelta(hours=i)
+
+        hour_text = hour.strftime("%H:%M")
+
+        html += f"""
+            <div class="hour">
+
+                <div class="hour-time">
+                    {hour_text}
+                </div>
+
+                <div class="hour-icon">
+                    🌤️
+                </div>
+
+                <div class="hour-temp">
+                    {temperature_text}
+                </div>
+
+            </div>
+"""
+
+    html += f"""
+        </div>
+
+    </section>
+
+
+    <div class="update">
+        気象庁アメダス 稲取
     </div>
+"""
 
-    <div class="hour-grid">
-
-        {cards}
-
+    if error_message:
+        html += f"""
+    <div class="error">
+        データ取得エラー<br>
+        {error_message}
     </div>
+"""
 
-</section>
-
-
+    html += """
 </div>
 
 </body>
@@ -721,71 +546,11 @@ body {{
 </html>
 """
 
-        return html
-
-    except Exception as e:
-
-        return f"""
-<!DOCTYPE html>
-
-<html lang="ja">
-
-<head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
-
-<title>伊豆熱川 天気・気圧</title>
-
-<style>
-
-body {{
-    margin: 0;
-    background: #F3F1F0;
-    font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Yu Gothic",
-        sans-serif;
-}}
-
-.error {{
-    max-width: 700px;
-    margin: 70px auto;
-    padding: 30px;
-    background: white;
-    border-radius: 20px;
-}}
-
-h1 {{
-    color: #A85D72;
-}}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="error">
-
-<h1>データ取得エラー</h1>
-
-<p>{str(e)}</p>
-
-</div>
-
-</body>
-
-</html>
-"""
+    return html
 
 
 if __name__ == "__main__":
-
     app.run(
         host="0.0.0.0",
-        port=5000
+        port=10000
     )
