@@ -2563,8 +2563,7 @@ body {
 
                 気圧の短時間変化が大きくなる時間帯です。<br>
 
-                {% for item in health_attention.items %}
-
+               {% for item in health_attention["items"] %}
                     {{ item.dt.strftime("%H:%M") }}
                     {{ item.pressure_label }}
 
