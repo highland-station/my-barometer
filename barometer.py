@@ -12,30 +12,29 @@ ELEVATION_DROP = 55.0  # 標高500m分の気圧減少補正 (hPa)
 
 def get_real_weather_data():
     try:
-        # 本物のネット気象サーバー（Open-Meteo）から最新の24時間予報を取得
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
         res = requests.get(url, timeout=5).json()
         hourly = res['hourly']
         
+        # タイムゾーンを日本時間(Asia/Tokyo)として正確に読み込む
         df = pd.DataFrame({
-            'Time': pd.to_datetime(hourly['time']),
+            'Time': pd.to_datetime(hourly['time']).tz_localize('Asia/Tokyo'),
             'SeaPress': hourly['surface_pressure'],
             'Code': hourly['weather_code'],
             'Temp': hourly['temperature_2m'],
             'Humi': hourly['relative_humidity_2m']
         })
         
-        # 🏡 標高500mの我が家の高さの気圧に補正
         df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
         df['Temp'] = round(df['Temp'], 1)
         
-        now = pd.Timestamp.now().floor('h')
+        # 現在の日本時間に基準を合わせる
+        now = pd.Timestamp.now(tz='Asia/Tokyo').floor('h')
         return df[df['Time'] >= now].head(24)
     except Exception:
         return None
 
 def get_weather_string(code):
-    # AIによる文字消えバグを回避するため、完全に安全な判定方法に書き換えました
     c = int(code)
     if c == 0:
         return "☀️ 快晴"
@@ -43,9 +42,9 @@ def get_weather_string(code):
         return "☁️ 曇りがち"
     elif c == 45 or c == 48:
         return "🌫️ 霧"
-    elif (51 <= c <= 67) or (80 <= c <= 82):
+    elif (c >= 51 and c <= 67) or (c >= 80 and c <= 82):
         return "☔ 雨"
-    elif (71 <= c <= 77) or (85 <= c <= 86):
+    elif (c >= 71 and c <= 77) or (c >= 85 and c <= 86):
         return "❄️ 雪"
     elif c == 95 or c == 96 or c == 99:
         return "⚡ 雷雨"
@@ -88,6 +87,7 @@ def index():
         t_val = row['Temp']
         h_val = row['Humi']
         
+        # 末尾に else "" を追加してバグを完全に修正しました
         bg = "background:#fffdfd;" if p_val <= 936.0 else ("background:#fffdf6;" if p_val <= 940.0 else "")
         status_txt = "🔴 警戒" if p_val <= 936.0 else ("⚠️ 注意" if p_val <= 940.0 else "正常")
         status_color = "#e02424" if p_val <= 936.0 else ("#b45309" if p_val <= 940.0 else "#057a55")
