@@ -11,11 +11,11 @@ LON = 139.0684
 
 def get_real_weather_data():
     try:
-        # 🌟 正しいパラメータ名 「pressures_msl」に修正しました！
+        # 🌟 パラメータ名を正しい「pressure_msl」に修正しました
         url = (
-            "https://open-meteo.com"
+            "https://api.open-meteo.com/v1/forecast"
             f"?latitude={LAT}&longitude={LON}"
-            "&hourly=pressures_msl,weather_code,temperature_2m,relative_humidity_2m,precipitation"
+            "&hourly=pressure_msl,weather_code,temperature_2m,relative_humidity_2m,precipitation"
             "&timezone=Asia%2FTokyo"
         )
         headers = {'User-Agent': 'Mozilla/5.0'}
@@ -28,7 +28,7 @@ def get_real_weather_data():
                 
                 df = pd.DataFrame({
                     'Time': pd.to_datetime(hourly['time']),
-                    'SeaPress': hourly['pressures_msl'],     # 天気予報と同じ海面更正気圧
+                    'SeaPress': hourly['pressure_msl'],     # 🌟正しいキー名に修正
                     'Code': hourly['weather_code'],
                     'Temp': hourly['temperature_2m'],
                     'Humi': hourly['relative_humidity_2m'],
@@ -66,7 +66,7 @@ def get_weather_string(code, rain_val=0.0):
 def index():
     df = get_real_weather_data()
     
-    # 通信失敗時のセーフティ（おなじみの天気予報基準の通常値）
+    # 通信失敗時のセーフティ
     if df is None or df.empty:
         now_time = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
         fallback_data = []
@@ -83,7 +83,7 @@ def index():
     current_humi = df['Humi'].head(1).item()
     current_rain = df['Rain'].head(1).item() 
     
-    # アラート判定基準（天気予報の気圧配置・頭痛リスクに最適化）
+    # アラート判定基準
     if current_press <= 1005.0: 
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
@@ -152,7 +152,8 @@ def index():
                 <h1>エンジェルフォレスト伊豆熱川 (500m)</h1>
             </div>
             <div class="current-box">
-                <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">リアルタイム気圧</div><div class="current-val" style="color:#fbbf24;">{current_press} hPa</div></div>
+                <!-- 🌟ラベルを「現在の予報気圧」に変更 -->
+                <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">現在の予報気圧</div><div class="current-val" style="color:#fbbf24;">{current_press} hPa</div></div>
                 <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">天気</div><div class="current-val">{current_weather}</div></div>
                 <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">現在の気温</div><div class="current-val" style="color:#f87171;">{current_temp}℃</div></div>
                 <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">現在の湿度</div><div class="current-val" style="color:#60a5fa;">{current_humi}%</div></div>
