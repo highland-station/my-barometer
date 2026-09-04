@@ -12,7 +12,6 @@ ELEVATION_DROP = 55.0
 
 def get_real_weather_data():
     try:
-        # 🌟サーバーからの通信ブロックを防ぐため、安全なUser-Agentヘッダーを追加します
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
         headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url, headers=headers, timeout=10)
@@ -33,36 +32,32 @@ def get_real_weather_data():
                 df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
                 df['Temp'] = round(df['Temp'], 1)
                 
+                # サーバー時間と日本時間の時差を補正
                 now = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
                 df_filtered = df[df['Time'] >= now]
                 
                 if not df_filtered.empty:
                     return df_filtered.head(24)
                 return df.head(24)
-    except Exception as e:
-        print("Error:", e)
+    except Exception:
+        pass
     return None
 
 def get_weather_string(code):
     c = int(code)
-    if c == 0:
-        return "☀️ 快晴"
-    elif c >= 1 and c <= 3:
-        return "☁️ 曇りがち"
-    elif c == 45 or c == 48:
-        return "🌫️ 霧"
-    elif (c >= 51 and c <= 67) or (c >= 80 and c <= 82):
-        return "☔ 雨"
-    elif (c >= 71 and c <= 77) or (c >= 85 and c <= 86):
-        return "❄️ 雪"
-    elif c == 95 or c == 96 or c == 99:
-        return "⚡ 雷雨"
+    if c == 0: return "☀️ 快晴"
+    elif c >= 1 and c <= 3: return "☁️ 曇りがち"
+    elif c == 45 or c == 48: return "🌫️ 霧"
+    elif (c >= 51 and c <= 67) or (c >= 80 and c <= 82): return "☔ 雨"
+    elif (c >= 71 and c <= 77) or (c >= 85 and c <= 86): return "❄️ 雪"
+    elif c == 95 or c == 96 or c == 99: return "⚡ 雷雨"
     return "☁️ 曇り"
 
 @app.route('/')
 def index():
     df = get_real_weather_data()
     
+    # データ取得失敗時のフォールバック処理
     if df is None or df.empty:
         now_time = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
         fallback_data = []
@@ -73,7 +68,10 @@ def index():
             })
         df = pd.DataFrame(fallback_data)
     
-    current_row = df.iloc
+    # 🌟 エラーの原因だった指定方法を、一番安全なリスト形式に修正
+    data_list = df.to_dict(orient='records')
+    current_row = data_list[0]
+    
     current_press = current_row['Press']
     current_weather = get_weather_string(current_row['Code'])
     current_temp = current_row['Temp']
@@ -83,7 +81,7 @@ def index():
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
-        message = f"<b>🔴 【気圧警戒】現在 {current_press} hPa まで気圧が低下しています！</b><br>頭痛 reloj の高い時間帯です。お部屋を暗くして、ワンちゃんと一緒にのんびり過ごしてください。"
+        message = f"<b>🔴 【気圧警戒】現在 {current_press} hPa まで気圧が低下しています！</b><br>頭痛のリスクが高い時間帯です。お部屋を暗くして、ワンちゃんと一緒にのんびり過ごしてください。"
     elif current_press <= 940.0:
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
@@ -96,7 +94,7 @@ def index():
         message = "<b>🍏 【環境安定】現在の高原の気圧は比較的穏やかです</b><br>これからの気圧の変化に備えて、今のうちに温かい水分を補給してリラックスしておきましょう。"
 
     rows_html = ""
-    for _, row in df.iterrows():
+    for row in data_list:
         time_str = row['Time'].strftime('%H:%M')
         weather_txt = get_weather_string(row['Code'])
         p_val = row['Press']
