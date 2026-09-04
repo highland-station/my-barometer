@@ -327,9 +327,9 @@ def index():
             """
 
 
-        # =========================
+        # =====================
         # HTML
-        # =========================
+        # =====================
 
         html = f"""
 
@@ -373,9 +373,9 @@ body {{
         "Noto Sans JP",
         sans-serif;
 
-    background: #F8F6F5;
+    background: #fff8fa;
 
-    color: #343034;
+    color: #3d2630;
 
     overflow-x: hidden;
 }}
@@ -406,7 +406,7 @@ body {{
 
 .current-box {{
 
-    background: #B86B7D;
+    background: #FF4F9A;
 
     border-radius: 20px;
 
@@ -414,10 +414,10 @@ body {{
 
     box-shadow:
         0 5px 18px rgba(
-            184,
-            107,
-            125,
-            0.22
+            255,
+            79,
+            154,
+            0.28
         );
 
     margin-bottom: 30px;
@@ -445,7 +445,7 @@ body {{
         255,
         255,
         255,
-        0.94
+        0.88
     );
 
     border-radius: 14px;
@@ -466,7 +466,12 @@ body {{
 
 .current-item.main-pressure {{
 
-    background: #FFFFFF;
+    background: rgba(
+        255,
+        255,
+        255,
+        0.96
+    );
 }}
 
 
@@ -474,7 +479,7 @@ body {{
 
     font-size: 15px;
 
-    color: #7D4655;
+    color: #9b315f;
 
     margin-bottom: 8px;
 }}
@@ -488,7 +493,7 @@ body {{
 
     line-height: 1.35;
 
-    color: #343034;
+    color: #3d2630;
 }}
 
 
@@ -496,7 +501,7 @@ body {{
 
     font-size: 17px;
 
-    color: #81777A;
+    color: #9b315f;
 
     font-weight: 500;
 }}
@@ -508,7 +513,7 @@ body {{
 
     font-weight: 700;
 
-    color: #343034;
+    color: #3d2630;
 }}
 
 
@@ -531,23 +536,23 @@ body {{
 
 .alert.normal {{
 
-    background: #FFFFFF;
+    background: #ffffff;
 
-    color: #7D4655;
+    color: #c2185b;
 }}
 
 .alert.warning {{
 
-    background: #F4E9C8;
+    background: #fff3cd;
 
-    color: #79651A;
+    color: #8a6500;
 }}
 
 .alert.danger {{
 
-    background: #F4DEDF;
+    background: #ffe4e6;
 
-    color: #8E3038;
+    color: #b00020;
 }}
 
 
@@ -561,7 +566,7 @@ body {{
 
     font-weight: 700;
 
-    color: #7D4655;
+    color: #c2185b;
 
     margin:
         0
@@ -573,7 +578,7 @@ body {{
 
 .forecast-grid {{
 
-    background: #F0EEED;
+    background: #FFF0F5;
 
     border-radius: 20px;
 
@@ -597,7 +602,7 @@ body {{
 
 .forecast-card {{
 
-    background: #FFFFFF;
+    background: #ffffff;
 
     border-radius: 14px;
 
@@ -607,16 +612,16 @@ body {{
 
     box-shadow:
         0 2px 8px rgba(
-            52,
-            48,
-            52,
-            0.07
+            194,
+            24,
+            91,
+            0.08
         );
 
     min-width: 0;
 
     border:
-        1px solid #E4DFDD;
+        1px solid #f8dce7;
 }}
 
 
@@ -628,7 +633,7 @@ body {{
 
     text-align: center;
 
-    color: #7D4655;
+    color: #c2185b;
 
     margin-bottom: 10px;
 }}
@@ -669,7 +674,7 @@ body {{
     padding: 5px 0;
 
     border-top:
-        1px solid #E5E1E0;
+        1px solid #f4e1e8;
 }}
 
 
@@ -677,13 +682,13 @@ body {{
 
     font-size: 14px;
 
-    color: #343034;
+    color: #3d2630;
 }}
 
 
 .small-row {{
 
-    color: #81777A;
+    color: #a37b8c;
 
     font-size: 12px;
 }}
@@ -692,7 +697,7 @@ body {{
 .forecast-pressure {{
 
     border-top:
-        1px solid #E5E1E0;
+        1px solid #f4e1e8;
 
     margin-top: 3px;
 
@@ -702,7 +707,7 @@ body {{
 
     font-size: 12px;
 
-    color: #81777A;
+    color: #9b6b7d;
 }}
 
 
@@ -712,7 +717,7 @@ body {{
 
     font-size: 16px;
 
-    color: #343034;
+    color: #3d2630;
 
     margin-top: 2px;
 }}
@@ -724,7 +729,7 @@ body {{
 
     font-size: 12px;
 
-    color: #81777A;
+    color: #a37b8c;
 
     margin-top: 2px;
 }}
@@ -752,25 +757,25 @@ body {{
 
 .forecast-status.normal {{
 
-    background: #F3E4E8;
+    background: #fce7f0;
 
-    color: #7D4655;
+    color: #c2185b;
 }}
 
 
 .forecast-status.warning {{
 
-    background: #F4E9C8;
+    background: #fff3cd;
 
-    color: #79651A;
+    color: #8a6500;
 }}
 
 
 .forecast-status.danger {{
 
-    background: #F4DEDF;
+    background: #ffe4e6;
 
-    color: #8E3038;
+    color: #b00020;
 }}
 
 
@@ -812,6 +817,8 @@ body {{
             25px;
     }}
 
+
+    /* 現在状況 */
 
     .current-box {{
 
@@ -994,7 +1001,7 @@ body {{
         text-align: left;
 
         border-top:
-            1px solid #E5E1E0;
+            1px solid #f4e1e8;
 
         margin-top: 3px;
 
