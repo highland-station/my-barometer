@@ -11,7 +11,6 @@ LON = 139.0684
 
 def get_real_weather_data():
     try:
-        # 天気コードに加えて「降水量(precipitation)」も同時に取得
         url = (
             "https://open-meteo.com"
             f"?latitude={LAT}&longitude={LON}"
@@ -35,13 +34,9 @@ def get_real_weather_data():
                     'Rain': hourly['precipitation']        # 降水量(mm)
                 })
                 
-                # 【気圧補正】APIが麓ベース(1000hPa超)を返すため、標高500m分(約55hPa)を引き算
-                df['Press'] = round(df['SeaPress'] - 55.0, 1)
-                
-                # 安全ガード
-                if df['Press'].mean() < 900.0:
-                    df['Press'] = round(df['SeaPress'], 1)
-
+                # 🌟【気圧補正】APIの値から標高500m分(55hPa)を確実に引き算
+                # もしAPIが最初から900hPa台の低い値を返してきた場合は、引き算せずにそのまま使います
+                df['Press'] = df['SeaPress'].apply(lambda x: round(x - 55.0, 1) if x > 980.0 else round(x, 1))
                 df['Temp'] = round(df['Temp'], 1)
                 
                 # 日本時間で現在の時間以降のデータをフィルタリング
@@ -82,7 +77,7 @@ def index():
         for i in range(24):
             fallback_data.append({
                 'Time': now_time + pd.Timedelta(hours=i),
-                'Press': 938.0, 'Code': 2, 'Temp': 21.5, 'Humi': 85, 'Rain': 0.0
+                'Press': 945.0, 'Code': 2, 'Temp': 25.0, 'Humi': 70, 'Rain': 0.0
             })
         df = pd.DataFrame(fallback_data)
     
@@ -90,9 +85,9 @@ def index():
     current_weather = get_weather_string(df['Code'].head(1).item(), df['Rain'].head(1).item())
     current_temp = df['Temp'].head(1).item()
     current_humi = df['Humi'].head(1).item()
-    current_rain = df['Rain'].head(1).item() # 🌟現在の降水量を取得
+    current_rain = df['Rain'].head(1).item() 
     
-    if current_press <= 943.0: # 標高500m用に基準値を調整
+    if current_press <= 943.0: 
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
@@ -115,7 +110,7 @@ def index():
         p_val = row['Press']
         t_val = row['Temp']
         h_val = row['Humi']
-        r_val = row['Rain'] # 🌟各時間の降水量
+        r_val = row['Rain'] 
         
         bg = "background:#fffdfd;" if p_val <= 943.0 else ("background:#fffdf6;" if p_val <= 948.0 else "")
         status_txt = "🔴 警戒" if p_val <= 943.0 else ("⚠️ 注意" if p_val <= 948.0 else "正常")
@@ -128,7 +123,6 @@ def index():
             <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{weather_txt}</td>
             <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#9b1c1c; font-weight:bold;">{t_val}℃</td>
             <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#1e429f; font-weight:bold;">{h_val}%</td>
-            <!-- 🌟テーブル内に降水量を追加 -->
             <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#4b5563;">{r_val} <span style="font-size:10px;color:#9ca3af;">mm</span></td>
             <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:{status_color}; font-weight:bold; font-size:12px;">{status_txt}</td>
         </tr>
@@ -165,7 +159,6 @@ def index():
                 <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">天気</div><div class="current-val">{current_weather}</div></div>
                 <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">現在の気温</div><div class="current-val" style="color:#f87171;">{current_temp}℃</div></div>
                 <div class="current-item" style="border-right: 1px solid #374151;"><div class="current-label">現在の湿度</div><div class="current-val" style="color:#60a5fa;">{current_humi}%</div></div>
-                <!-- 🌟上部の現在のステータス欄に「現在の降水量」を追加 -->
                 <div class="current-item"><div class="current-label">降水量</div><div class="current-val" style="color:#34d399;">{current_rain}mm</div></div>
             </div>
             <div class="alert-banner">{message}</div>
