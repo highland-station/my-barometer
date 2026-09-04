@@ -16,9 +16,9 @@ def get_real_weather_data():
         res = requests.get(url, timeout=5).json()
         hourly = res['hourly']
         
-        # タイムゾーンを日本時間(Asia/Tokyo)として正確に読み込む
+        # 最初から日本時間で届くデータをそのまま安全に読み込む
         df = pd.DataFrame({
-            'Time': pd.to_datetime(hourly['time']).tz_localize('Asia/Tokyo'),
+            'Time': pd.to_datetime(hourly['time']),
             'SeaPress': hourly['surface_pressure'],
             'Code': hourly['weather_code'],
             'Temp': hourly['temperature_2m'],
@@ -28,9 +28,12 @@ def get_real_weather_data():
         df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
         df['Temp'] = round(df['Temp'], 1)
         
-        # 現在の日本時間に基準を合わせる
-        now = pd.Timestamp.now(tz='Asia/Tokyo').floor('h')
-        return df[df['Time'] >= now].head(24)
+        # 現在時刻以降のデータを24時間分抽出
+        now = pd.Timestamp.now()
+        df_filtered = df[df['Time'] >= now]
+        if df_filtered.empty:
+            return df.head(24)
+        return df_filtered.head(24)
     except Exception:
         return None
 
@@ -54,7 +57,7 @@ def get_weather_string(code):
 def index():
     df = get_real_weather_data()
     
-    if df is None:
+    if df is None or df.empty:
         return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
     
     current_row = df.iloc
@@ -72,7 +75,7 @@ def index():
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
         alert_text = "#723b13"
-        message = f"<b>⚠️ 【気圧注意】気圧が {current_press} hPa まで下がってきています</b><br>自律神経に少しずつ負担がかかってっています。坂道を下りてふもとへ移動する際は、体への衝撃を和らげるために「時速20〜30km」の減速運転を心がけましょう。"
+        message = f"<b>⚠️ 【気圧注意】気圧が {current_press} hPa まで下がってきています</b><br>自律神経に少しずつ負担がかかっています。坂道を下りてふもとへ移動する際は、体への衝撃を和らげるために「時速20〜30km」の減速運転を心がけましょう。"
     else:
         alert_bg = "#f3f8fc"
         alert_border = "#e1effa"
@@ -174,7 +177,6 @@ def index():
     </html>
     '''
 
-# 🌟 無料サーバーでもパソコンテストでも両方で100%エラーが出ない起動ルールに合体
 port = int(os.environ.get("PORT", 5000))
 wsgi_app = app.wsgi_app
 
