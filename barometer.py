@@ -8,11 +8,16 @@ app = Flask(__name__)
 # 🏡 東伊豆町奈良本（標高500m）の位置
 LAT = 34.8156
 LON = 139.0684
-ELEVATION_DROP = 55.0
 
 def get_real_weather_data():
     try:
-        url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
+        # 🌟 ChatGPTが直してくれた、1文字も狂いのない正しい本物のURL
+        url = (
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={LAT}&longitude={LON}"
+            "&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m"
+            "&timezone=Asia%2FTokyo"
+        )
         headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url, headers=headers, timeout=10)
         
@@ -23,24 +28,25 @@ def get_real_weather_data():
                 
                 df = pd.DataFrame({
                     'Time': pd.to_datetime(hourly['time']),
-                    'SeaPress': hourly['surface_pressure'],
+                    'SeaPress': hourly['surface_pressure'], # 地表気圧
                     'Code': hourly['weather_code'],
                     'Temp': hourly['temperature_2m'],
                     'Humi': hourly['relative_humidity_2m']
                 })
                 
-                df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
+                # 🌟計算のバグを修正：surface_pressureは最初から我が家の高さの気圧なので引き算は不要！
+                df['Press'] = round(df['SeaPress'], 1)
                 df['Temp'] = round(df['Temp'], 1)
                 
-                # サーバーの時差を日本時間に補正
-                now = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
+                # 🌟時間の比較バグを修正：エラーの起きない安全な日本時間で比較
+                now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
                 df_filtered = df[df['Time'] >= now]
                 
                 if not df_filtered.empty:
                     return df_filtered.head(24)
                 return df.head(24)
-    except Exception:
-        pass
+    except Exception as e:
+        print("API Error:", e)
     return None
 
 def get_weather_string(code):
@@ -59,7 +65,7 @@ def index():
     
     # 通信失敗時のセーフティ
     if df is None or df.empty:
-        now_time = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
+        now_time = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
         fallback_data = []
         for i in range(24):
             fallback_data.append({
@@ -68,18 +74,17 @@ def index():
             })
         df = pd.DataFrame(fallback_data)
     
-    # 🌟 AIバグで記号が消えるのを防ぐため、.item()命令で最初の1行目を100%確実に抽出！
     current_press = df['Press'].head(1).item()
     current_weather = get_weather_string(df['Code'].head(1).item())
     current_temp = df['Temp'].head(1).item()
     current_humi = df['Humi'].head(1).item()
     
-    if current_press <= 936.0:
+    if current_press <= 943.0: # 標高500m用に基準値を調整
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
         message = f"<b>🔴 【気圧警戒】現在 {current_press} hPa まで気圧が低下しています！</b><br>頭痛のリスクが高い時間帯です。お部屋を暗くして、ワンちゃんと一緒にのんびり過ごしてください。"
-    elif current_press <= 940.0:
+    elif current_press <= 948.0:
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
         alert_text = "#723b13"
@@ -98,9 +103,9 @@ def index():
         t_val = row['Temp']
         h_val = row['Humi']
         
-        bg = "background:#fffdfd;" if p_val <= 936.0 else ("background:#fffdf6;" if p_val <= 940.0 else "")
-        status_txt = "🔴 警戒" if p_val <= 936.0 else ("⚠️ 注意" if p_val <= 940.0 else "正常")
-        status_color = "#e02424" if p_val <= 936.0 else ("#b45309" if p_val <= 940.0 else "#057a55")
+        bg = "background:#fffdfd;" if p_val <= 943.0 else ("background:#fffdf6;" if p_val <= 948.0 else "")
+        status_txt = "🔴 警戒" if p_val <= 943.0 else ("⚠️ 注意" if p_val <= 948.0 else "正常")
+        status_color = "#e02424" if p_val <= 943.0 else ("#b45309" if p_val <= 948.0 else "#057a55")
         
         rows_html += f'''
         <tr style="{bg}">
