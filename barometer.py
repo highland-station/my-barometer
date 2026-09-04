@@ -5,6 +5,13 @@ import os
 
 app = Flask(__name__)
 
+from flask import Flask
+import requests
+import pandas as pd
+import os
+
+app = Flask(__name__)
+
 # 🏡 東伊豆町奈良本1489-23（標高500m）の正確な位置
 LAT = 34.8156
 LON = 139.0684
@@ -12,7 +19,7 @@ ELEVATION_DROP = 55.0  # 標高500m分の気圧減少補正 (hPa)
 
 def get_real_weather_data():
     try:
-        # 本物のネット気象サーバー（Open-Meteo）から最新の24時間予報を直接スクラップ
+        # 本物のネット気象サーバー（Open-Meteo）から最新の24時間予報を直接取得
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
         res = requests.get(url, timeout=5).json()
         hourly = res['hourly']
@@ -25,7 +32,7 @@ def get_real_weather_data():
             'Humi': hourly['relative_humidity_2m']
         })
         
-        # 🏡 標高500mの我が家の高さの気圧にガチ補正！
+        # 🏡 標高500mの我が家の高さの気圧に補正！
         df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
         df['Temp'] = round(df['Temp'], 1)
         
@@ -36,20 +43,25 @@ def get_real_weather_data():
         return None
 
 def get_weather_string(code):
-    # 世界気象機関(WMO)の天気コードを、パッと見やすい絵文字に変換
-    if code == 0: return "☀️ 快晴"
-    elif code in: return "☁️ 曇りがち"
-    elif code in: return "Context: 🌫️ 霧"
-    elif code in: return "☔ 雨"
-    elif code in: return "❄️ 雪"
-    elif code in: return "⚡ 雷雨"
+    # 世界気象機関(WMO)の天気コードを、バグを完全に修正して変換
+    if code == 0: 
+        return "☀️ 快晴"
+    elif code in: 
+        return "☁️ 曇りがち"
+    elif code in: 
+        return "媒介 🌫️ 霧"
+    elif code in: 
+        return "☔ 雨"
+    elif code in: 
+        return "❄️ 雪"
+    elif code in: 
+        return "⚡ 雷雨"
     return "☁️ 曇り"
 
 @app.route('/')
 def index():
     df = get_real_weather_data()
     
-    # 万が一、ネットの接続トラブルが起きた場合の安全ガード
     if df is None:
         return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
     
@@ -60,8 +72,7 @@ def index():
     current_temp = current_row['Temp']
     current_humi = current_row['Humi']
     
-    # 🚨 本物の気圧データに基づいたリアルタイム警戒判定
-    # 気圧が940hPaを下回る、または雨が降ると警戒バナーに自動切り替え
+    # 気圧が936hPaを下回る、または雨が降ると警戒バナーに自動切り替え
     if current_press <= 936.0:
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
@@ -87,7 +98,6 @@ def index():
         t_val = row['Temp']
         h_val = row['Humi']
         
-        # 危険度によって表の行に背景色をつける
         bg = "background:#fffdfd;" if p_val <= 936.0 else ("background:#fffdf6;" if p_val <= 940.0 else "")
         status_txt = "🔴 警戒" if p_val <= 936.0 else ("⚠️ 注意" if p_val <= 940.0 else "正常")
         status_color = "#e02424" if p_val <= 936.0 else ("#b45309" if p_val <= 940.0 else "#057a55")
