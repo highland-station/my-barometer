@@ -32,7 +32,7 @@ def get_real_weather_data():
                 df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
                 df['Temp'] = round(df['Temp'], 1)
                 
-                # サーバー時間と日本時間の時差を補正
+                # サーバーの時差を日本時間に補正
                 now = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
                 df_filtered = df[df['Time'] >= now]
                 
@@ -57,7 +57,7 @@ def get_weather_string(code):
 def index():
     df = get_real_weather_data()
     
-    # データ取得失敗時のフォールバック処理
+    # 通信失敗時のセーフティ
     if df is None or df.empty:
         now_time = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
         fallback_data = []
@@ -68,14 +68,11 @@ def index():
             })
         df = pd.DataFrame(fallback_data)
     
-    # 🌟 エラーの原因だった指定方法を、一番安全なリスト形式に修正
-    data_list = df.to_dict(orient='records')
-    current_row = data_list[0]
-    
-    current_press = current_row['Press']
-    current_weather = get_weather_string(current_row['Code'])
-    current_temp = current_row['Temp']
-    current_humi = current_row['Humi']
+    # 🌟 AIバグで記号が消えるのを防ぐため、.item()命令で最初の1行目を100%確実に抽出！
+    current_press = df['Press'].head(1).item()
+    current_weather = get_weather_string(df['Code'].head(1).item())
+    current_temp = df['Temp'].head(1).item()
+    current_humi = df['Humi'].head(1).item()
     
     if current_press <= 936.0:
         alert_bg = "#fdf2f2"
@@ -94,7 +91,7 @@ def index():
         message = "<b>🍏 【環境安定】現在の高原の気圧は比較的穏やかです</b><br>これからの気圧の変化に備えて、今のうちに温かい水分を補給してリラックスしておきましょう。"
 
     rows_html = ""
-    for row in data_list:
+    for _, row in df.iterrows():
         time_str = row['Time'].strftime('%H:%M')
         weather_txt = get_weather_string(row['Code'])
         p_val = row['Press']
