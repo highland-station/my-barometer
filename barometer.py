@@ -1,6 +1,5 @@
 from flask import Flask
 import requests
-import time
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -9,14 +8,10 @@ app = Flask(__name__)
 # 設定
 # =========================================================
 
-# エンジェルフォレスト周辺・約500m
-HIGHLAND_LAT = 34.8346
-HIGHLAND_LON = 139.0481
-HIGHLAND_ELEVATION = 500
-
 # 気象庁アメダス 稲取
 INATORI_ID = "50506"
 
+# キャッシュ
 CACHE_SECONDS = 600
 
 cache = {
@@ -26,65 +21,73 @@ cache = {
 
 
 # =========================================================
-# 天気表示
+# 天気コード
 # =========================================================
 
-def weather_text(code):
+def weather_text_from_jma(code):
+
+    if code is None:
+        return "☁️ くもり"
+
     code = int(code)
 
     if code == 0:
         return "☀️ 快晴"
-    if code == 1:
+    elif code == 1:
         return "🌤️ 晴れ"
-    if code == 2:
-        return "⛅ 晴れ時々くもり"
-    if code == 3:
+    elif code == 2:
+        return "⛅ 晴れ"
+    elif code == 3:
         return "☁️ くもり"
-    if code in [45, 48]:
+    elif code in [45, 48]:
         return "🌫️ 霧"
-    if 51 <= code <= 67:
+    elif 51 <= code <= 67:
         return "☔ 雨"
-    if 71 <= code <= 77:
+    elif 71 <= code <= 77:
         return "❄️ 雪"
-    if 80 <= code <= 82:
+    elif 80 <= code <= 82:
         return "☔ 雨"
-    if code in [85, 86]:
+    elif code in [85, 86]:
         return "❄️ 雪"
-    if code in [95, 96, 99]:
+    elif code in [95, 96, 99]:
         return "⚡ 雷雨"
 
     return "☁️ くもり"
 
 
 def pressure_status(pressure):
+
+    if pressure is None:
+        return "normal", "観測中"
+
     if pressure <= 1005:
         return "danger", "気圧低下"
-    elif pressure <= 1010:
+
+    if pressure <= 1010:
         return "warning", "やや低め"
-    else:
-        return "normal", "安定"
+
+    return "normal", "安定"
 
 
 # =========================================================
-# 気象庁アメダス実測
+# 気象庁アメダス
 # =========================================================
 
 def get_jma_observation():
 
     now = datetime.now()
 
-    # 10分刻み
-    minute = (now.minute // 10) * 10
-
-    # 最新データがまだ更新されていない可能性があるので
-    # 最大30分前まで探す
-    for back in range(0, 40, 10):
+    # 最新の10分刻みデータを探す
+    for back in range(0, 61, 10):
 
         target = now - timedelta(minutes=back)
 
-        target_minute = (target.minute // 10) * 10
+        minute = (target.minute // 10) * 10
 
-        timestamp = target.strftime("%Y%m%d") + f"{target.hour:02d}{target_minute:02d}"
+        timestamp = (
+            target.strftime("%Y%m%d")
+            + f"{target.hour:02d}{minute:02d}"
+        )
 
         url = (
             "https://www.jma.go.jp/bosai/amedas/data/map/"
@@ -127,59 +130,12 @@ def get_jma_observation():
 
 
 # =========================================================
-# Open-Meteo JMAモデル
-# =========================================================
-
-def get_jma_model():
-
-    url = "https://api.open-meteo.com/v1/jma"
-
-    params = {
-        "latitude": HIGHLAND_LAT,
-        "longitude": HIGHLAND_LON,
-
-        "hourly": (
-            "temperature_2m,"
-            "relative_humidity_2m,"
-            "pressure_msl,"
-            "surface_pressure,"
-            "precipitation,"
-            "weather_code"
-        ),
-
-        "timezone": "Asia/Tokyo",
-        "forecast_days": 2,
-
-        # 約500m地点
-        "elevation": HIGHLAND_ELEVATION
-    }
-
-    response = requests.get(
-        url,
-        params=params,
-        timeout=12,
-        headers={
-            "User-Agent": "IzuAtagawaWeather/1.0"
-        }
-    )
-
-    if response.status_code == 429:
-        raise Exception(
-            "Open-Meteoが一時的にアクセスを制限しています。"
-        )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-# =========================================================
 # データ取得
 # =========================================================
 
 def get_weather():
 
-    now = time.time()
+    now = datetime.now().timestamp()
 
     # キャッシュ
     if (
@@ -188,19 +144,21 @@ def get_weather():
     ):
         return cache["data"]
 
-    jma_observation = get_jma_observation()
+    observation = get_jma_observation()
 
-    jma_model = get_jma_model()
+    if observation is None:
+        raise Exception(
+            "気象庁アメダスの観測データを取得できませんでした。"
+        )
 
-    data = {
-        "observation": jma_observation,
-        "model": jma_model
+    result = {
+        "observation": observation
     }
 
-    cache["data"] = data
-    cache["time"] = time.time()
+    cache["data"] = result
+    cache["time"] = now
 
-    return data
+    return result
 
 
 # =========================================================
@@ -214,99 +172,76 @@ def index():
 
         data = get_weather()
 
-        observation = data["observation"]
-        model = data["model"]
+        obs = data["observation"]
 
-        hourly = model["hourly"]
+        temperature = obs["temperature"]
+        humidity = obs["humidity"]
+        precipitation = obs["precipitation"]
+        pressure = obs["pressure"]
 
-        times = hourly["time"]
-        temps = hourly["temperature_2m"]
-        humidity = hourly["relative_humidity_2m"]
-        pressure_msl = hourly["pressure_msl"]
-        surface_pressure = hourly["surface_pressure"]
-        rain = hourly["precipitation"]
-        weather_codes = hourly["weather_code"]
+        if temperature is None:
+            temperature_text = "--"
+        else:
+            temperature_text = f"{temperature:.1f}"
 
-        # 現在
-        current_temp = observation["temperature"]
+        if humidity is None:
+            humidity_text = "--"
+        else:
+            humidity_text = f"{humidity:.0f}"
 
-        if current_temp is None:
-            current_temp = temps[0]
+        if precipitation is None:
+            precipitation_text = "--"
+        else:
+            precipitation_text = f"{precipitation:.1f}"
 
-        current_humidity = observation["humidity"]
-
-        if current_humidity is None:
-            current_humidity = humidity[0]
-
-        current_rain = observation["precipitation"]
-
-        if current_rain is None:
-            current_rain = 0
-
-        current_pressure = observation["pressure"]
-
-        # 気象庁実測に気圧がない場合は
-        # JMAモデルの地上気圧を使用
-        if current_pressure is None:
-            current_pressure = surface_pressure[0]
-
-        current_msl = pressure_msl[0]
-
-        # 高地モデル温度
-        highland_temp = temps[0]
-
-        # 海側実測との差
-        temperature_difference = (
-            highland_temp - current_temp
-        )
+        if pressure is None:
+            pressure_text = "--"
+            msl_pressure_text = "--"
+        else:
+            pressure_text = f"{pressure:.1f}"
+            msl_pressure_text = f"{pressure:.1f}"
 
         status_class, status_text = pressure_status(
-            current_msl
+            pressure
         )
 
-        # -------------------------------------------------
-        # 24時間カード
-        # -------------------------------------------------
+        # =================================================
+        # 24時間表示
+        # =================================================
 
         cards = ""
 
-        for i in range(min(24, len(times))):
+        current_time = datetime.now()
 
-            temp = temps[i]
-            hum = humidity[i]
-            pmsl = pressure_msl[i]
-            psurface = surface_pressure[i]
-            precipitation = rain[i]
-            code = weather_codes[i]
+        for i in range(24):
 
-            card_status, card_text = pressure_status(pmsl)
+            card_time = current_time + timedelta(hours=i)
 
             cards += f"""
             <div class="hour-card">
 
                 <div class="hour-time">
-                    {times[i][5:10].replace("-", "/")}
-                    {times[i][11:16]}
+                    {card_time.strftime("%-m/%-d %H:%M")}
                 </div>
 
-                <div class="hour-status {card_status}">
-                    {card_text}
+                <div class="hour-status {status_class}">
+                    {status_text}
                 </div>
 
                 <div class="hour-weather">
-                    {weather_text(code)}
+                    気象庁観測
                 </div>
 
                 <div class="hour-temp">
-                    {temp:.1f}°
+                    {temperature_text}°
                 </div>
 
                 <div class="hour-info">
-                    湿度 {hum:.0f}%
+                    湿度 {humidity_text}%
                 </div>
 
                 <div class="hour-info">
-                    降水 {precipitation:.1f} mm
+                    降水 {precipitation_text} mm
                 </div>
 
                 <div class="hour-pressure">
@@ -314,21 +249,21 @@ def index():
                     <span>気圧</span>
 
                     <strong>
-                        {psurface:.1f}
+                        {pressure_text}
                     </strong>
 
                     <strong>
-                        {pmsl:.1f}
+                        {msl_pressure_text}
                     </strong>
 
-                    <small>hPa</small>
+                    <small>
+                        hPa
+                    </small>
 
                 </div>
 
             </div>
             """
-
-        current_code = weather_codes[0]
 
         html = f"""
 <!DOCTYPE html>
@@ -370,9 +305,9 @@ body {{
 }}
 
 
-/* =====================================
+/* ===============================
    現在
-===================================== */
+================================ */
 
 .current {{
     background: #A85D72;
@@ -380,13 +315,7 @@ body {{
     border-radius: 28px;
     padding: 34px;
     box-shadow:
-        0 14px 35px rgba(70,45,52,0.16);
-}}
-
-.current-top {{
-    display: flex;
-    justify-content: space-between;
-    gap: 30px;
+        0 14px 35px rgba(70,45,52,.16);
 }}
 
 .location {{
@@ -417,6 +346,12 @@ body {{
     font-size: 18px;
 }}
 
+.current-top {{
+    display: flex;
+    justify-content: space-between;
+    gap: 30px;
+}}
+
 .current-pressure {{
     min-width: 220px;
     background: rgba(255,255,255,.14);
@@ -443,7 +378,8 @@ body {{
 
 .current-info {{
     display: grid;
-    grid-template-columns: repeat(3,1fr);
+    grid-template-columns:
+        repeat(3,1fr);
     gap: 14px;
     margin-top: 30px;
 }}
@@ -466,9 +402,9 @@ body {{
 }}
 
 
-/* =====================================
+/* ===============================
    24時間
-===================================== */
+================================ */
 
 .forecast {{
     margin-top: 30px;
@@ -570,9 +506,9 @@ body {{
 }}
 
 
-/* =====================================
+/* ===============================
    タブレット
-===================================== */
+================================ */
 
 @media (max-width: 1000px) {{
 
@@ -584,9 +520,9 @@ body {{
 }}
 
 
-/* =====================================
+/* ===============================
    スマホ
-===================================== */
+================================ */
 
 @media (max-width: 700px) {{
 
@@ -634,9 +570,9 @@ body {{
 }}
 
 
-/* =====================================
+/* ===============================
    小さいスマホ
-===================================== */
+================================ */
 
 @media (max-width: 420px) {{
 
@@ -673,17 +609,17 @@ body {{
             <div class="weather-main">
 
                 <div class="weather-icon">
-                    {weather_text(current_code).split(" ")[0]}
+                    🌤️
                 </div>
 
                 <div>
 
                     <div class="temperature">
-                        {current_temp:.1f}℃
+                        {temperature_text}℃
                     </div>
 
                     <div class="weather-name">
-                        {weather_text(current_code)}
+                        気象庁アメダス実測
                     </div>
 
                 </div>
@@ -700,14 +636,14 @@ body {{
             </div>
 
             <div class="pressure-number">
-                {current_pressure:.1f}
+                {pressure_text}
                 <span class="pressure-unit">
                     hPa
                 </span>
             </div>
 
             <div class="pressure-number">
-                {current_msl:.1f}
+                {msl_pressure_text}
                 <span class="pressure-unit">
                     hPa
                 </span>
@@ -727,7 +663,7 @@ body {{
             </div>
 
             <div class="info-value">
-                {current_humidity:.0f}%
+                {humidity_text}%
             </div>
 
         </div>
@@ -740,7 +676,7 @@ body {{
             </div>
 
             <div class="info-value">
-                {current_rain:.1f} mm
+                {precipitation_text} mm
             </div>
 
         </div>
@@ -749,11 +685,11 @@ body {{
         <div class="info-box">
 
             <div class="info-label">
-                海側との気温差
+                観測地点
             </div>
 
             <div class="info-value">
-                {temperature_difference:+.1f}℃
+                稲取
             </div>
 
         </div>
@@ -838,10 +774,6 @@ h1 {{
 <h1>データ取得エラー</h1>
 
 <p>{str(e)}</p>
-
-<p>
-少し時間を置いて、もう一度お試しください。
-</p>
 
 </div>
 
