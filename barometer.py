@@ -1,13 +1,17 @@
-from flask import Flask, render_template_string
-import requests
 import math
-from datetime import datetime, timezone, timedelta
+import os
+from datetime import datetime, timedelta, timezone
+
+import requests
+from flask import Flask, render_template_string
+
 
 app = Flask(__name__)
 
-# =========================================================
-# 自宅
-# =========================================================
+
+# ============================================================
+# 自宅情報
+# ============================================================
 
 HOME_LAT = 34.8346
 HOME_LON = 139.0481
@@ -15,9 +19,10 @@ HOME_ALTITUDE = 500
 
 JST = timezone(timedelta(hours=9))
 
-# =========================================================
-# API
-# =========================================================
+
+# ============================================================
+# 気象庁 AMeDAS
+# ============================================================
 
 JMA_LATEST_URL = (
     "https://www.jma.go.jp/bosai/amedas/data/latest_time.txt"
@@ -27,330 +32,359 @@ JMA_STATION_URL = (
     "https://www.jma.go.jp/bosai/amedas/const/amedastable.json"
 )
 
+JMA_MAP_URL = (
+    "https://www.jma.go.jp/bosai/amedas/data/map/{}.json"
+)
+
+
+# ============================================================
+# MET Norway
+# ============================================================
+
 MET_URL = (
     "https://api.met.no/weatherapi/locationforecast/2.0/complete"
 )
 
-# ★ここは自分のメールアドレスに変更
+# Renderの環境変数 MET_CONTACT_EMAIL に自分のメールアドレスを
+# 設定しておくと確実です。
+#
+# 未設定の場合は下の文字列が使われます。
+MET_CONTACT_EMAIL = os.environ.get(
+    "MET_CONTACT_EMAIL",
+    "contact@example.com"
+)
+
 MET_HEADERS = {
-    "User-Agent": "NarabotoWeather/1.0 your-email@example.com"
+    "User-Agent": (
+        f"NarabotoWeather/1.0 ({MET_CONTACT_EMAIL})"
+    ),
+    "Accept": "application/json",
 }
 
-# =========================================================
-# 共通関数
-# =========================================================
 
-def to_float(value):
-    if value is None:
-        return None
+# ============================================================
+# 共通
+# ============================================================
 
-    if isinstance(value, list):
-        if len(value) == 0:
-            return None
-        value = value[0]
-
+def safe_float(value):
+    """数値へ安全に変換"""
     try:
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            return None
+
         return float(value)
+
     except (TypeError, ValueError):
         return None
 
 
-def amedas_value(obs, key):
-    """
-    AMeDASの値は基本的に
-    [値, 品質情報, ...]
-    の形なので、値だけ取り出す。
-    """
+def format_number(value, digits=1):
+    """表示用数値"""
+    if value is None:
+        return "—"
 
-    if not isinstance(obs, dict):
-        return None
+    return f"{value:.{digits}f}"
 
-    return to_float(obs.get(key))
-
-
-# =========================================================
-# AMeDAS 座標
-# =========================================================
 
 def coord_to_decimal(value):
     """
-    JMA AMeDASのlat/lonは
-    [度, 分]
-    の形式なので10進数に変換。
+    AMeDASの [度, 分] または [度, 分, 秒] を
+    十進法へ変換。
     """
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
 
     if isinstance(value, list) and len(value) >= 2:
-        degree = to_float(value[0])
-        minute = to_float(value[1])
+        try:
+            degree = float(value[0])
+            minute = float(value[1])
 
-        if degree is None or minute is None:
+            second = 0.0
+            if len(value) >= 3:
+                second = float(value[2])
+
+            sign = -1 if degree < 0 else 1
+
+            return sign * (
+                abs(degree)
+                + minute / 60
+                + second / 3600
+            )
+
+        except (TypeError, ValueError):
             return None
 
-        return degree + minute / 60.0
-
-    return to_float(value)
+    return None
 
 
-# =========================================================
-# 最寄りAMeDAS
-# =========================================================
+def distance_km(lat1, lon1, lat2, lon2):
+    """簡易ハーサイン距離"""
+    r = 6371.0
+
+    p1 = math.radians(lat1)
+    p2 = math.radians(lat2)
+
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(dp / 2) ** 2
+        + math.cos(p1)
+        * math.cos(p2)
+        * math.sin(dl / 2) ** 2
+    )
+
+    return r * 2 * math.atan2(
+        math.sqrt(a),
+        math.sqrt(1 - a)
+    )
+
+
+def jst_now():
+    return datetime.now(JST)
+
+
+# ============================================================
+# AMeDAS
+# ============================================================
+
+WIND_DIRECTIONS = {
+    0: "静穏",
+    1: "北",
+    2: "北北東",
+    3: "北東",
+    4: "東北東",
+    5: "東",
+    6: "東南東",
+    7: "南東",
+    8: "南南東",
+    9: "南",
+    10: "南南西",
+    11: "南西",
+    12: "西南西",
+    13: "西",
+    14: "西北西",
+    15: "北西",
+    16: "北北西",
+}
+
+
+def get_json(url, timeout=20, headers=None):
+    """JSON取得"""
+    response = requests.get(
+        url,
+        timeout=timeout,
+        headers=headers
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+def get_latest_amedas_time():
+    """AMeDAS最新観測時刻取得"""
+
+    response = requests.get(
+        JMA_LATEST_URL,
+        timeout=20
+    )
+
+    response.raise_for_status()
+
+    text = response.text.strip()
+
+    # 例:
+    # 2026-09-04T11:10:00Z
+    dt = datetime.fromisoformat(
+        text.replace("Z", "+00:00")
+    )
+
+    return dt.astimezone(JST)
+
 
 def find_nearest_station(stations):
+    """自宅に最も近いAMeDAS観測所を探す"""
 
-    nearest = None
-    best_distance = float("inf")
-
-    cos_lat = math.cos(
-        math.radians(HOME_LAT)
-    )
+    best = None
+    best_distance = None
 
     for station_id, station in stations.items():
 
-        lat = coord_to_decimal(
-            station.get("lat")
-        )
-
-        lon = coord_to_decimal(
-            station.get("lon")
-        )
+        lat = coord_to_decimal(station.get("lat"))
+        lon = coord_to_decimal(station.get("lon"))
 
         if lat is None or lon is None:
             continue
 
-        dlat = lat - HOME_LAT
-        dlon = (
-            lon - HOME_LON
-        ) * cos_lat
-
-        distance2 = (
-            dlat * dlat +
-            dlon * dlon
+        distance = distance_km(
+            HOME_LAT,
+            HOME_LON,
+            lat,
+            lon
         )
 
-        if distance2 < best_distance:
+        if best_distance is None or distance < best_distance:
 
-            best_distance = distance2
+            best_distance = distance
 
-            nearest = {
+            best = {
                 "id": str(station_id),
-                "name": (
-                    station.get("kjName")
-                    or station.get("kjName2")
-                    or "AMeDAS"
-                ),
+                "name": station.get("kjName")
+                or station.get("enName")
+                or str(station_id),
                 "lat": lat,
                 "lon": lon,
-                "distance_km": math.sqrt(
-                    distance2
-                ) * 111.0,
-                "altitude": station.get("alt")
+                "distance": distance,
             }
 
-    return nearest
+    return best
 
 
-# =========================================================
-# AMeDAS 現在観測
-# =========================================================
+def amedas_value(obs, key):
+    """
+    AMeDASの値を安全に取得。
+
+    AMeDASでは
+    [値, 品質情報, 品質情報...]
+    のような配列になることがある。
+    """
+
+    if not obs:
+        return None
+
+    value = obs.get(key)
+
+    if isinstance(value, list):
+
+        if len(value) == 0:
+            return None
+
+        return safe_float(value[0])
+
+    return safe_float(value)
+
 
 def get_amedas():
+    """周辺AMeDAS観測"""
 
     try:
 
-        # -------------------------------------------------
-        # 最新時刻
-        # -------------------------------------------------
+        latest_dt = get_latest_amedas_time()
 
-        r = requests.get(
-            JMA_LATEST_URL,
-            timeout=20
-        )
-
-        r.raise_for_status()
-
-        latest_text = r.text.strip()
-
-        if not latest_text:
-            raise Exception(
-                "latest_time.txt が空です"
-            )
-
-        # ISO形式
-        try:
-            dt = datetime.fromisoformat(
-                latest_text.replace(
-                    "Z",
-                    "+00:00"
-                )
-            )
-
-        except ValueError:
-
-            dt = datetime.strptime(
-                latest_text[:14],
-                "%Y%m%d%H%M%S"
-            ).replace(
-                tzinfo=JST
-            )
-
-        dt = dt.astimezone(JST)
-
-        timestamp = dt.strftime(
+        timestamp = latest_dt.strftime(
             "%Y%m%d%H%M%S"
         )
 
-        # -------------------------------------------------
-        # 観測所一覧
-        # -------------------------------------------------
-
-        r = requests.get(
-            JMA_STATION_URL,
-            timeout=20
+        stations = get_json(
+            JMA_STATION_URL
         )
-
-        r.raise_for_status()
-
-        stations = r.json()
 
         station = find_nearest_station(
             stations
         )
 
         if station is None:
-            raise Exception(
-                "最寄りAMeDASが見つかりません"
+            raise RuntimeError(
+                "AMeDAS観測所が見つかりません"
             )
+
+        data = get_json(
+            JMA_MAP_URL.format(timestamp)
+        )
 
         station_id = station["id"]
 
-        # -------------------------------------------------
-        # 最新観測データ
-        # -------------------------------------------------
-
-        map_url = (
-            "https://www.jma.go.jp/"
-            "bosai/amedas/data/map/"
-            f"{timestamp}.json"
-        )
-
-        r = requests.get(
-            map_url,
-            timeout=20
-        )
-
-        r.raise_for_status()
-
-        data = r.json()
-
-        # IDを文字列として取得
-        obs = data.get(
-            station_id
+        obs = (
+            data.get(station_id)
+            or data.get(str(station_id))
         )
 
         if obs is None:
 
-            # 念のため数値キーも試す
+            # 念のため整数キーも確認
             try:
-                obs = data.get(
-                    int(station_id)
-                )
+                obs = data.get(int(station_id))
             except Exception:
-                obs = None
+                pass
 
         if obs is None:
-            raise Exception(
-                f"観測データなし station={station_id}"
+            raise RuntimeError(
+                f"AMeDAS観測データなし: {station_id}"
             )
 
-        # -------------------------------------------------
-        # 観測値
-        # -------------------------------------------------
-
-        temperature = amedas_value(
-            obs,
-            "temp"
-        )
-
-        humidity = amedas_value(
-            obs,
-            "humidity"
-        )
-
+        temp = amedas_value(obs, "temp")
+        humidity = amedas_value(obs, "humidity")
         rain10 = amedas_value(
             obs,
             "precipitation10m"
         )
-
         rain1h = amedas_value(
             obs,
             "precipitation1h"
         )
-
         wind = amedas_value(
             obs,
             "wind"
         )
-
-        wind_direction = amedas_value(
+        wind_direction_value = amedas_value(
             obs,
             "windDirection"
         )
 
-        pressure = amedas_value(
-            obs,
-            "pressure"
-        )
+        wind_direction = "—"
 
-        normal_pressure = amedas_value(
-            obs,
-            "normalPressure"
-        )
+        if wind_direction_value is not None:
 
+            direction_int = int(
+                round(wind_direction_value)
+            )
+
+            wind_direction = (
+                WIND_DIRECTIONS.get(
+                    direction_int,
+                    "—"
+                )
+            )
+
+        # 視程
         visibility = amedas_value(
             obs,
             "visibility"
         )
 
+        # デバッグ用。
+        # 必要ならRenderのログで実際のAMeDAS構造を確認できます。
+        print(
+            "AMeDAS:",
+            station["name"],
+            "temp=", temp,
+            "humidity=", humidity,
+            "rain10=", rain10,
+            "wind=", wind,
+            "windDirection=", wind_direction_value
+        )
+
         return {
             "ok": True,
-
+            "station": station["name"],
             "station_id": station_id,
-            "station_name": station["name"],
-
-            "distance_km":
-                station["distance_km"],
-
-            "observed_at":
-                dt.strftime(
-                    "%Y/%m/%d %H:%M"
-                ),
-
-            "temperature":
-                temperature,
-
-            "humidity":
-                humidity,
-
-            "rain10":
-                rain10,
-
-            "rain1h":
-                rain1h,
-
-            "wind":
-                wind,
-
-            "wind_direction":
-                wind_direction,
-
-            "pressure":
-                pressure,
-
-            "normal_pressure":
-                normal_pressure,
-
-            "visibility":
-                visibility,
+            "distance": station["distance"],
+            "observed_at": latest_dt,
+            "temp": temp,
+            "humidity": humidity,
+            "rain10": rain10,
+            "rain1h": rain1h,
+            "wind": wind,
+            "wind_direction": wind_direction,
+            "visibility": visibility,
+            "raw": obs,
         }
 
     except Exception as e:
@@ -362,81 +396,42 @@ def get_amedas():
 
         return {
             "ok": False,
-            "error": str(e)
+            "error": str(e),
+            "station": "—",
+            "distance": None,
+            "observed_at": None,
+            "temp": None,
+            "humidity": None,
+            "rain10": None,
+            "rain1h": None,
+            "wind": None,
+            "wind_direction": "—",
+            "visibility": None,
+            "raw": {},
         }
 
 
-# =========================================================
-# JMA 風向
-# =========================================================
-
-JMA_WIND_DIRECTIONS = [
-    "静穏",
-    "北",
-    "北北東",
-    "北東",
-    "東北東",
-    "東",
-    "東南東",
-    "南東",
-    "南南東",
-    "南",
-    "南南西",
-    "南西",
-    "西南西",
-    "西",
-    "西北西",
-    "北西",
-    "北北西",
-]
-
-
-def jma_wind_direction(value):
-
-    if value is None:
-        return "—"
-
-    try:
-
-        i = int(round(value))
-
-        if 0 <= i < len(
-            JMA_WIND_DIRECTIONS
-        ):
-            return JMA_WIND_DIRECTIONS[i]
-
-    except Exception:
-        pass
-
-    return "—"
-
-
-# =========================================================
+# ============================================================
 # MET Norway
-# =========================================================
+# ============================================================
 
 def get_met_forecast():
+    """奈良本・標高500mの予報"""
 
     try:
 
-        # 4桁程度にしてAPIキャッシュ効率も確保
-        lat = round(
-            HOME_LAT,
-            4
-        )
-
-        lon = round(
-            HOME_LON,
-            4
-        )
-
         params = {
-            "lat": lat,
-            "lon": lon,
-            "altitude": HOME_ALTITUDE
+            "lat": HOME_LAT,
+            "lon": HOME_LON,
+            "altitude": HOME_ALTITUDE,
         }
 
-        r = requests.get(
+        print(
+            "MET REQUEST:",
+            params
+        )
+
+        response = requests.get(
             MET_URL,
             params=params,
             headers=MET_HEADERS,
@@ -445,24 +440,19 @@ def get_met_forecast():
 
         print(
             "MET STATUS:",
-            r.status_code
+            response.status_code
         )
 
-        print(
-            "MET URL:",
-            r.url
-        )
-
-        if r.status_code != 200:
+        if response.status_code != 200:
 
             print(
                 "MET RESPONSE:",
-                r.text[:1000]
+                response.text[:1000]
             )
 
-        r.raise_for_status()
+            response.raise_for_status()
 
-        return r.json()
+        return response.json()
 
     except Exception as e:
 
@@ -474,47 +464,61 @@ def get_met_forecast():
         return None
 
 
-# =========================================================
-# 気圧計算
-# =========================================================
+def get_period_data(data):
+    """
+    next_1_hours → next_6_hours → next_12_hours
+    の順で期間データを取得。
+    """
 
-def surface_pressure(
-    sea_level_pressure,
-    temperature
-):
-
-    if (
-        sea_level_pressure is None
-        or temperature is None
+    for key in (
+        "next_1_hours",
+        "next_6_hours",
+        "next_12_hours",
     ):
-        return None
 
-    return (
-        sea_level_pressure
-        * math.exp(
-            -9.80665
-            * HOME_ALTITUDE
-            /
-            (
-                287.05
-                *
-                (
-                    temperature
-                    + 273.15
-                )
-            )
-        )
-    )
+        value = data.get(key)
+
+        if isinstance(value, dict):
+            return value
+
+    return {}
 
 
-# =========================================================
-# MET 天気
-# =========================================================
-
-def weather_icon(symbol):
+def symbol_to_japanese(symbol):
+    """MET Norwayのsymbol_codeを日本語表示へ"""
 
     if not symbol:
-        return "☁️"
+        return "—"
+
+    s = symbol.lower()
+
+    mapping = [
+        ("heavyrain", "強い雨"),
+        ("lightrain", "弱い雨"),
+        ("rain", "雨"),
+        ("sleet", "みぞれ"),
+        ("snow", "雪"),
+        ("fog", "霧"),
+        ("thunderstorm", "雷雨"),
+        ("fair", "晴れ"),
+        ("clearsky", "快晴"),
+        ("partlycloudy", "晴れ時々くもり"),
+        ("cloudy", "くもり"),
+    ]
+
+    for key, value in mapping:
+
+        if key in s:
+            return value
+
+    return "くもり"
+
+
+def symbol_icon(symbol):
+    """天気アイコン"""
+
+    if not symbol:
+        return "🌤️"
 
     s = symbol.lower()
 
@@ -524,8 +528,11 @@ def weather_icon(symbol):
     if "heavyrain" in s:
         return "🌧️"
 
-    if "rain" in s:
+    if "lightrain" in s:
         return "🌦️"
+
+    if "rain" in s:
+        return "🌧️"
 
     if "sleet" in s:
         return "🌨️"
@@ -548,602 +555,403 @@ def weather_icon(symbol):
     if "cloudy" in s:
         return "☁️"
 
-    return "☁️"
+    return "🌤️"
 
 
-def weather_name(symbol):
+def build_forecasts(met_json):
+    """
+    MET Norway JSONから24時間分を作る。
+    """
 
-    if not symbol:
-        return "曇り"
-
-    s = symbol.lower()
-
-    if "thunder" in s:
-        return "雷雨"
-
-    if "heavyrain" in s:
-        return "強い雨"
-
-    if "rain" in s:
-        return "雨"
-
-    if "sleet" in s:
-        return "みぞれ"
-
-    if "snow" in s:
-        return "雪"
-
-    if "fog" in s:
-        return "霧"
-
-    if "clearsky" in s:
-        return "晴れ"
-
-    if "fair" in s:
-        return "晴れ"
-
-    if "partlycloudy" in s:
-        return "晴れ時々曇り"
-
-    if "cloudy" in s:
-        return "曇り"
-
-    return "曇り"
-
-
-# =========================================================
-# MET 予報を24時間作成
-# =========================================================
-
-def build_forecasts(data):
-
-    if not data:
+    if not met_json:
         return []
 
     timeseries = (
-        data
+        met_json
         .get("properties", {})
         .get("timeseries", [])
     )
 
-    if not timeseries:
-        return []
-
-    now = datetime.now(
-        timezone.utc
-    )
-
-    result = []
+    forecasts = []
 
     for item in timeseries:
 
         try:
 
-            valid = datetime.fromisoformat(
-                item["time"].replace(
+            time_text = item.get("time")
+
+            if not time_text:
+                continue
+
+            dt = datetime.fromisoformat(
+                time_text.replace(
                     "Z",
                     "+00:00"
                 )
+            ).astimezone(JST)
+
+            instant = (
+                item
+                .get("data", {})
+                .get("instant", {})
+                .get("details", {})
             )
 
-        except Exception:
-            continue
-
-        # 現在から24時間
-        hours = (
-            valid - now
-        ).total_seconds() / 3600
-
-        if hours < -0.5:
-            continue
-
-        if hours > 24.5:
-            break
-
-        data_block = item.get(
-            "data",
-            {}
-        )
-
-        instant = (
-            data_block
-            .get("instant", {})
-            .get("details", {})
-        )
-
-        # -------------------------------------------------
-        # 期間データ
-        # -------------------------------------------------
-
-        period = data_block.get(
-            "next_1_hours"
-        )
-
-        if period is None:
-            period = data_block.get(
-                "next_6_hours"
+            period = get_period_data(
+                item.get("data", {})
             )
 
-        if period is None:
-            period = data_block.get(
-                "next_12_hours"
+            period_details = (
+                period
+                .get("details", {})
             )
 
-        period_details = (
-            period.get("details", {})
-            if period
-            else {}
-        )
-
-        summary = (
-            period.get("summary", {})
-            if period
-            else {}
-        )
-
-        # -------------------------------------------------
-        # instant
-        # -------------------------------------------------
-
-        temperature = to_float(
-            instant.get(
-                "air_temperature"
+            summary = (
+                period
+                .get("summary", {})
             )
-        )
 
-        sea_pressure = to_float(
-            instant.get(
-                "air_pressure_at_sea_level"
+            symbol = summary.get(
+                "symbol_code"
             )
-        )
 
-        humidity = to_float(
-            instant.get(
-                "relative_humidity"
+            temperature = safe_float(
+                instant.get("air_temperature")
             )
-        )
 
-        wind = to_float(
-            instant.get(
-                "wind_speed"
+            humidity = safe_float(
+                instant.get("relative_humidity")
             )
-        )
 
-        wind_direction = to_float(
-            instant.get(
-                "wind_from_direction"
+            sea_pressure = safe_float(
+                instant.get(
+                    "air_pressure_at_sea_level"
+                )
             )
-        )
 
-        gust = to_float(
-            instant.get(
-                "wind_speed_of_gust"
+            wind = safe_float(
+                instant.get("wind_speed")
             )
-        )
 
-        # -------------------------------------------------
-        # period
-        # -------------------------------------------------
-
-        precipitation = to_float(
-            period_details.get(
-                "precipitation_amount"
+            wind_direction = safe_float(
+                instant.get(
+                    "wind_from_direction"
+                )
             )
-        )
 
-        rain_probability = to_float(
-            period_details.get(
-                "probability_of_precipitation"
+            precipitation = safe_float(
+                period_details.get(
+                    "precipitation_amount"
+                )
             )
-        )
 
-        thunder_probability = to_float(
-            period_details.get(
-                "probability_of_thunder"
+            rain_probability = safe_float(
+                period_details.get(
+                    "probability_of_precipitation"
+                )
             )
-        )
 
-        symbol = summary.get(
-            "symbol_code"
-        )
+            thunder_probability = safe_float(
+                period_details.get(
+                    "probability_of_thunder"
+                )
+            )
 
-        local = valid.astimezone(
-            JST
-        )
+            # 自宅標高500mの推定地上気圧
+            surface = None
 
-        result.append({
+            if (
+                sea_pressure is not None
+                and temperature is not None
+            ):
 
-            "datetime":
-                local.strftime(
-                    "%Y-%m-%d %H:%M"
+                surface = (
+                    sea_pressure
+                    * math.exp(
+                        -9.80665
+                        * HOME_ALTITUDE
+                        / (
+                            287.05
+                            * (
+                                temperature
+                                + 273.15
+                            )
+                        )
+                    )
+                )
+
+            forecasts.append({
+                "dt": dt,
+                "temperature": temperature,
+                "humidity": humidity,
+                "sea_pressure": sea_pressure,
+                "surface_pressure": surface,
+                "wind": wind,
+                "wind_direction": wind_direction,
+                "precipitation": precipitation,
+                "rain_probability": rain_probability,
+                "thunder_probability": thunder_probability,
+                "symbol": symbol,
+                "weather": symbol_to_japanese(
+                    symbol
                 ),
+                "icon": symbol_icon(symbol),
+            })
 
-            "time":
-                local.strftime(
-                    "%H:%M"
-                ),
+        except Exception as e:
 
-            "temperature":
-                temperature,
+            print(
+                "FORECAST ITEM ERROR:",
+                repr(e)
+            )
 
-            "humidity":
-                humidity,
-
-            "sea_pressure":
-                sea_pressure,
-
-            "surface_pressure":
-                surface_pressure(
-                    sea_pressure,
-                    temperature
-                ),
-
-            "wind":
-                wind,
-
-            "gust":
-                gust,
-
-            "wind_direction":
-                wind_direction,
-
-            "precipitation":
-                precipitation,
-
-            "rain_probability":
-                rain_probability,
-
-            "thunder_probability":
-                thunder_probability,
-
-            "symbol":
-                symbol,
-
-            "icon":
-                weather_icon(symbol),
-
-            "weather":
-                weather_name(symbol),
-        })
-
-    # 時刻重複を除去
-    unique = {}
-
-    for item in result:
-        unique[
-            item["datetime"]
-        ] = item
-
-    return list(
-        unique.values()
-    )[:25]
+    return forecasts
 
 
-# =========================================================
-# MET 風向
-# =========================================================
+# ============================================================
+# 自宅現在値
+# ============================================================
 
-MET_DIRECTIONS = [
-    "北",
-    "北北東",
-    "北東",
-    "東北東",
-    "東",
-    "東南東",
-    "南東",
-    "南南東",
-    "南",
-    "南南西",
-    "南西",
-    "西南西",
-    "西",
-    "西北西",
-    "北西",
-    "北北西",
-]
-
-
-def met_wind_direction(
-    degree
-):
-
-    if degree is None:
-        return "—"
-
-    index = int(
-        (
-            degree + 11.25
-        ) / 22.5
-    ) % 16
-
-    return MET_DIRECTIONS[index]
-
-
-# =========================================================
-# 気圧傾向
-# =========================================================
-
-def pressure_trend(
-    forecasts
-):
-
-    if len(forecasts) < 4:
-
-        return {
-            "icon": "—",
-            "title":
-                "気圧の傾向を判定できません",
-            "text": ""
-        }
-
-    p1 = forecasts[0].get(
-        "sea_pressure"
-    )
-
-    p2 = forecasts[3].get(
-        "sea_pressure"
-    )
-
-    if p1 is None or p2 is None:
-
-        return {
-            "icon": "—",
-            "title":
-                "気圧の傾向を判定できません",
-            "text": ""
-        }
-
-    diff = p2 - p1
-
-    if diff <= -2:
-
-        return {
-            "icon": "↓",
-            "title":
-                "気圧は下降傾向",
-            "text":
-                "天候が崩れる方向への変化に注意。"
-        }
-
-    if diff >= 2:
-
-        return {
-            "icon": "↑",
-            "title":
-                "気圧は上昇傾向",
-            "text":
-                "天候が回復する方向への変化です。"
-        }
-
-    return {
-        "icon": "→",
-        "title":
-            "気圧は比較的安定",
-        "text":
-            "大きな気圧変化は予想されていません。"
-    }
-
-
-# =========================================================
-# 気象状況
-# =========================================================
-
-def build_alerts(
-    forecasts
-):
+def nearest_forecast(forecasts):
+    """
+    現在時刻に最も近いMET予報を取得。
+    """
 
     if not forecasts:
-        return []
+        return None
 
-    next_hours = forecasts[:7]
+    now = datetime.now(JST)
 
-    alerts = []
-
-    # 強い雨
-    heavy = None
-
-    for x in next_hours:
-
-        rain = x.get(
-            "precipitation"
+    return min(
+        forecasts,
+        key=lambda x: abs(
+            (x["dt"] - now).total_seconds()
         )
-
-        if rain is not None and rain >= 5:
-
-            heavy = x
-            break
-
-    if heavy:
-
-        alerts.append({
-            "icon": "🌧️",
-            "title":
-                "強い雨に注意",
-            "text":
-                f"{heavy['time']}頃に"
-                f" {heavy['precipitation']:.1f} mm"
-                "前後の降水が予想されています。"
-        })
-
-    # 雷
-    thunder = None
-
-    for x in next_hours:
-
-        symbol = x.get(
-            "symbol"
-        )
-
-        probability = x.get(
-            "thunder_probability"
-        )
-
-        if (
-            symbol
-            and "thunder"
-            in symbol.lower()
-        ):
-            thunder = x
-            break
-
-        if (
-            probability is not None
-            and probability >= 30
-        ):
-            thunder = x
-            break
-
-    if thunder:
-
-        alerts.append({
-            "icon": "⛈️",
-            "title":
-                "雷雨に注意",
-            "text":
-                f"{thunder['time']}頃に"
-                "雷雨の可能性があります。"
-        })
-
-    # 強風
-    strong = None
-
-    for x in next_hours:
-
-        wind = x.get(
-            "wind"
-        )
-
-        if (
-            wind is not None
-            and wind >= 10
-        ):
-            strong = x
-            break
-
-    if strong:
-
-        alerts.append({
-            "icon": "🌬️",
-            "title":
-                "強風に注意",
-            "text":
-                f"{strong['time']}頃に"
-                f"風速 {strong['wind']:.1f} m/s"
-                "前後が予想されています。"
-        })
-
-    if not alerts:
-
-        alerts.append({
-            "icon": "✓",
-            "title":
-                "大きな荒天の兆候はありません",
-            "text":
-                "今後数時間の予報では大きな荒天は予想されていません。"
-        })
-
-    return alerts
-
-
-# =========================================================
-# 現在の観測状況
-# =========================================================
-
-def current_status(
-    amedas
-):
-
-    if not amedas.get(
-        "ok"
-    ):
-
-        return {
-            "icon": "—",
-            "title":
-                "現在の観測を取得できません",
-            "text":
-                "気象庁AMeDASのデータを取得できませんでした。"
-        }
-
-    rain = amedas.get(
-        "rain10"
     )
+
+
+# ============================================================
+# 気圧傾向
+# ============================================================
+
+def pressure_trend(forecasts):
+    """
+    現在付近から数時間の気圧変化を判定。
+    """
+
+    current = nearest_forecast(
+        forecasts
+    )
+
+    if current is None:
+        return "気圧の傾向を判定できません"
+
+    now = datetime.now(JST)
+
+    future = [
+        x for x in forecasts
+        if x["dt"] >= now
+    ]
+
+    if len(future) < 2:
+        return "気圧の傾向を判定できません"
+
+    current_pressure = (
+        current["surface_pressure"]
+    )
+
+    if current_pressure is None:
+        return "気圧の傾向を判定できません"
+
+    target = None
+
+    for item in future:
+
+        if (
+            item["dt"] - now
+            >= timedelta(hours=2)
+        ):
+
+            target = item
+            break
+
+    if target is None:
+        target = future[-1]
+
+    target_pressure = (
+        target["surface_pressure"]
+    )
+
+    if target_pressure is None:
+        return "気圧の傾向を判定できません"
+
+    difference = (
+        target_pressure
+        - current_pressure
+    )
+
+    if difference >= 2:
+        return "上昇傾向"
+
+    if difference <= -2:
+        return "下降傾向"
+
+    return "安定"
+
+
+def pressure_level(pressure):
+    """気圧の大まかな表示"""
+
+    if pressure is None:
+        return "—"
+
+    if pressure >= 1020:
+        return "高め"
+
+    if pressure <= 1000:
+        return "低め"
+
+    return "標準"
+
+
+# ============================================================
+# 天気状況
+# ============================================================
+
+def current_weather_status(amedas):
+    """
+    現在の状況はAMeDAS実測を優先。
+    """
+
+    rain = amedas.get("rain10")
 
     visibility = amedas.get(
         "visibility"
     )
 
-    # 霧
     if (
         visibility is not None
         and visibility <= 1000
     ):
+        return (
+            "🌫️ 視程が低下しています",
+            "周辺AMeDASで視程1000m以下が観測されています。"
+        )
 
-        return {
-            "icon": "🌫️",
-            "title":
-                "霧・視程低下",
-            "text":
-                f"観測視程 約{visibility:.0f}m"
-        }
+    if rain is not None:
 
-    # 雨
-    if (
-        rain is not None
-        and rain >= 0.5
-    ):
+        if rain >= 0.5:
+            return (
+                "🌧️ 雨を観測しています",
+                f"直近10分の降水量は {rain:.1f} mm です。"
+            )
 
-        return {
-            "icon": "🌧️",
-            "title":
-                "雨を観測",
-            "text":
-                f"直近10分 {rain:.1f} mm"
-        }
+        if rain > 0:
+            return (
+                "🌦️ 降水を観測しています",
+                f"直近10分の降水量は {rain:.1f} mm です。"
+            )
 
-    if (
-        rain is not None
-        and rain > 0
-    ):
-
-        return {
-            "icon": "🌦️",
-            "title":
-                "降水を観測",
-            "text":
-                f"直近10分 {rain:.1f} mm"
-        }
-
-    return {
-        "icon": "✓",
-        "title":
-            "現在、降水は観測されていません",
-        "text":
+        return (
+            "✓ 現在、降水は観測されていません",
             "周辺AMeDASでは直近10分の降水はありません。"
-    }
+        )
+
+    return (
+        "— 現在の降水状況を確認できません",
+        "AMeDASの降水データを取得できませんでした。"
+    )
 
 
-# =========================================================
+# ============================================================
+# 予報上の注意
+# ============================================================
+
+def build_alerts(forecasts):
+
+    alerts = []
+
+    future = forecasts[:]
+
+    for item in future:
+
+        rain = item.get(
+            "precipitation"
+        )
+
+        wind = item.get(
+            "wind"
+        )
+
+        thunder = item.get(
+            "thunder_probability"
+        )
+
+        weather = item.get(
+            "weather",
+            ""
+        )
+
+        if (
+            rain is not None
+            and rain >= 5
+        ):
+            alerts.append(
+                "🌧️ 今後、強い雨となる時間帯があります。"
+            )
+
+        if (
+            wind is not None
+            and wind >= 10
+        ):
+            alerts.append(
+                "💨 今後、風が強まる予報があります。"
+            )
+
+        if (
+            thunder is not None
+            and thunder >= 30
+        ):
+            alerts.append(
+                "⛈️ 雷の可能性があります。"
+            )
+
+        if "雷" in weather:
+            alerts.append(
+                "⛈️ 雷雨の予報があります。"
+            )
+
+    # 重複削除
+    result = []
+
+    for alert in alerts:
+
+        if alert not in result:
+            result.append(alert)
+
+    return result[:4]
+
+
+# ============================================================
 # HTML
-# =========================================================
+# ============================================================
 
 HTML = r"""
-<!DOCTYPE html>
-
+<!doctype html>
 <html lang="ja">
 
 <head>
 
-<meta charset="UTF-8">
+<meta charset="utf-8">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1">
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+>
 
-<title>奈良本 天気・気圧</title>
+<title>奈良本｜天気・気圧</title>
 
-<script
-src="https://cdn.jsdelivr.net/npm/chart.js">
-</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 
@@ -1151,370 +959,277 @@ src="https://cdn.jsdelivr.net/npm/chart.js">
     box-sizing: border-box;
 }
 
+html,
 body {
-
     margin: 0;
-
-    color: #eee7e8;
-
-    background:
-        radial-gradient(
-            circle at top right,
-            #35282d,
-            #1a1819 48%,
-            #111112
-        );
-
+    padding: 0;
+    background: #171516;
+    color: #eee8e8;
     font-family:
         -apple-system,
         BlinkMacSystemFont,
         "Segoe UI",
+        "Noto Sans JP",
         sans-serif;
 }
 
-.wrapper {
-
-    max-width: 1450px;
-
-    margin: auto;
-
+body {
     padding: 28px;
 }
 
+.page {
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
 .header {
-
-    display: flex;
-
-    justify-content:
-        space-between;
-
-    align-items: end;
-
+    border-bottom: 1px solid #393234;
+    padding-bottom: 18px;
     margin-bottom: 24px;
 }
 
-.location {
-
-    font-size: 18px;
-
-    letter-spacing:
-        .08em;
+.title {
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: .08em;
 }
 
-.location strong {
-
-    color: #f0c1cd;
-
-    font-size: 27px;
+.title span {
+    color: #c98991;
 }
 
 .updated {
-
-    color: #9e9699;
-
+    margin-top: 8px;
+    color: #91888a;
     font-size: 13px;
 }
 
-.panel {
-
-    background:
-        rgba(30,27,29,.94);
-
-    border:
-        1px solid #3b3437;
-
-    border-radius: 16px;
-
-    padding: 22px;
-
-    margin-bottom: 20px;
+.section {
+    margin-top: 30px;
 }
 
-.panel-title {
-
-    color: #d8a9b6;
-
+.section-title {
     font-size: 14px;
-
-    letter-spacing:
-        .08em;
-
-    margin-bottom: 16px;
+    letter-spacing: .12em;
+    color: #c98991;
+    margin-bottom: 14px;
 }
 
-.observation-name {
-
-    color: #aaa1a4;
-
-    font-size: 12px;
-
-    margin-bottom: 18px;
+.home-weather {
+    background: #211d1e;
+    border: 1px solid #3a3335;
+    border-radius: 12px;
+    padding: 24px;
 }
 
-.grid {
-
-    display: grid;
-
-    grid-template-columns:
-        repeat(4,1fr);
-
-    gap: 14px;
+.home-label {
+    color: #aaa1a3;
+    font-size: 13px;
+    margin-bottom: 8px;
 }
 
-.metric {
-
-    border-top:
-        1px solid #40383b;
-
-    padding-top: 13px;
+.home-temp {
+    font-size: 54px;
+    font-weight: 300;
+    letter-spacing: -.03em;
 }
 
-.metric-label {
-
-    color: #9e9699;
-
-    font-size: 12px;
-
-    margin-bottom: 7px;
+.home-temp-unit {
+    font-size: 20px;
+    color: #aaa1a3;
 }
 
-.metric-value {
-
-    font-family: Georgia,serif;
-
-    font-size: 26px;
-}
-
-.unit {
-
-    color: #aaa1a4;
-
-    font-family:
-        sans-serif;
-
-    font-size: 12px;
+.home-meta {
+    margin-top: 8px;
+    color: #b7afb1;
+    font-size: 13px;
 }
 
 .note {
-
-    color: #90898b;
-
+    color: #81797b;
     font-size: 11px;
-
+    margin-top: 12px;
     line-height: 1.7;
-
-    margin-top: 18px;
 }
 
-.pressure {
-
-    display: flex;
-
-    gap: 45px;
-
-    flex-wrap: wrap;
+.observation {
+    border-top: 1px solid #393234;
+    border-bottom: 1px solid #393234;
+    padding: 18px 0;
 }
 
-.pressure-value {
-
-    font-family: Georgia,serif;
-
-    font-size: 40px;
+.station {
+    color: #b9b0b2;
+    font-size: 13px;
+    margin-bottom: 18px;
 }
 
-.pressure-label {
-
-    color: #999194;
-
-    font-size: 11px;
-
-    margin-top: 4px;
-}
-
-.trend {
-
-    border-top:
-        1px solid #40383b;
-
-    margin-top: 18px;
-
-    padding-top: 15px;
-}
-
-.trend-title {
-
-    color: #f0c1cd;
-
-    font-size: 16px;
-}
-
-.trend-text {
-
-    color: #a9a1a4;
-
-    font-size: 12px;
-
-    margin-top: 5px;
-}
-
-.alerts {
-
+.metrics {
     display: grid;
-
     grid-template-columns:
-        repeat(auto-fit,minmax(260px,1fr));
-
+        repeat(5, minmax(0, 1fr));
     gap: 12px;
 }
 
-.alert {
-
-    background: #252123;
-
-    border-left:
-        3px solid #c993a3;
-
-    border-radius: 9px;
-
+.metric {
     padding: 15px;
+    background: #211d1e;
+    border: 1px solid #332d2f;
+    border-radius: 9px;
 }
 
-.alert-title {
-
-    color: #f0c1cd;
-
-    font-size: 14px;
+.metric-label {
+    color: #81797b;
+    font-size: 11px;
+    margin-bottom: 8px;
 }
 
-.alert-text {
-
-    color: #aaa2a5;
-
-    font-size: 12px;
-
-    line-height: 1.6;
-
-    margin-top: 6px;
+.metric-value {
+    font-size: 20px;
+    font-weight: 400;
 }
 
-.forecast-scroll {
-
-    overflow-x: auto;
-
-    padding-bottom: 8px;
+.pressure {
+    display: grid;
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    gap: 14px;
 }
 
-.forecast {
-
-    display: flex;
-
-    gap: 10px;
-
-    width: max-content;
+.pressure-box {
+    background: #211d1e;
+    border: 1px solid #3a3335;
+    border-radius: 10px;
+    padding: 20px;
 }
 
-.card {
-
-    width: 145px;
-
-    min-height: 205px;
-
-    background: #242022;
-
-    border:
-        1px solid #393337;
-
-    border-radius: 12px;
-
-    padding: 14px;
-}
-
-.time {
-
-    color: #aaa1a4;
-
+.pressure-label {
+    color: #81797b;
     font-size: 12px;
 }
 
-.temp {
-
-    font-family: Georgia,serif;
-
-    font-size: 28px;
-
-    margin: 8px 0;
-}
-
-.weather {
-
-    font-size: 13px;
-
-    min-height: 40px;
-
-    line-height: 1.5;
-}
-
-.rain {
-
-    color: #b7afb1;
-
-    font-size: 11px;
-
-    margin-top: 10px;
-}
-
-.wind {
-
-    color: #c0b8ba;
-
-    font-size: 11px;
-
+.pressure-value {
+    font-size: 30px;
     margin-top: 8px;
 }
 
-.chart {
+.trend {
+    margin-top: 14px;
+    color: #c98991;
+}
 
-    height: 320px;
+.status {
+    padding: 20px 0;
+    border-bottom: 1px solid #393234;
+}
+
+.status-main {
+    font-size: 19px;
+}
+
+.status-sub {
+    margin-top: 7px;
+    color: #92898b;
+    font-size: 13px;
+}
+
+.alert {
+    padding: 13px 0;
+    border-bottom: 1px solid #302a2c;
+    color: #d6a0a5;
+    font-size: 13px;
+}
+
+.forecast-wrap {
+    overflow-x: auto;
+    padding-bottom: 10px;
+}
+
+.forecast {
+    display: flex;
+    gap: 10px;
+    min-width: max-content;
+}
+
+.forecast-card {
+    width: 112px;
+    background: #211d1e;
+    border: 1px solid #332d2f;
+    border-radius: 10px;
+    padding: 13px;
+    text-align: center;
+}
+
+.forecast-time {
+    color: #8d8587;
+    font-size: 11px;
+}
+
+.forecast-icon {
+    font-size: 28px;
+    margin: 8px 0;
+}
+
+.forecast-temp {
+    font-size: 21px;
+}
+
+.forecast-weather {
+    margin-top: 4px;
+    color: #aaa1a3;
+    font-size: 11px;
+}
+
+.forecast-rain {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #b9b0b2;
+}
+
+.chart-box {
+    background: #211d1e;
+    border: 1px solid #332d2f;
+    border-radius: 10px;
+    padding: 16px;
+    height: 310px;
+}
+
+.chart-box canvas {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .error {
-
-    color: #d39eac;
-
-    font-size: 13px;
-
-    line-height: 1.7;
+    color: #b8878d;
+    font-size: 12px;
+    padding: 10px 0;
 }
 
 .footer {
-
-    color: #716a6d;
-
-    text-align: center;
-
-    font-size: 10px;
-
-    margin: 30px 0 10px;
+    margin-top: 35px;
+    padding-top: 18px;
+    border-top: 1px solid #393234;
+    color: #70696b;
+    font-size: 11px;
 }
 
-@media(max-width:800px) {
+@media (max-width: 800px) {
 
-    .wrapper {
-        padding: 16px;
+    body {
+        padding: 18px;
     }
 
-    .header {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .grid {
+    .metrics {
         grid-template-columns:
-            repeat(2,1fr);
+            repeat(2, minmax(0, 1fr));
     }
 
-    .chart {
-        height: 260px;
+    .pressure {
+        grid-template-columns: 1fr;
+    }
+
+    .home-temp {
+        font-size: 46px;
     }
 }
 
@@ -1524,791 +1239,827 @@ body {
 
 <body>
 
-<div class="wrapper">
+<div class="page">
 
-<div class="header">
+    <header class="header">
 
-<div class="location">
+        <div class="title">
+            <span>奈良本</span>
+            ｜標高 約500m
+        </div>
 
-<strong>奈良本</strong>
-｜標高 約500m
+        <div class="updated">
+            {{ updated }}
+        </div>
 
-</div>
+    </header>
 
-<div class="updated">
-{{ now }}
-</div>
 
-</div>
+    <!-- 自宅の推定気温 -->
 
+    <section class="section">
 
-<!-- =====================================================
-     現在観測
-===================================================== -->
+        <div class="section-title">
+            自宅の現在推定
+        </div>
 
-<div class="panel">
+        <div class="home-weather">
 
-<div class="panel-title">
-現在の周辺観測
-</div>
+            <div class="home-label">
+                奈良本・標高約500m地点
+            </div>
 
-{% if amedas.ok %}
+            <div class="home-temp">
 
-<div class="observation-name">
+                {% if home_temp is not none %}
+                    {{ "%.1f"|format(home_temp) }}
+                    <span class="home-temp-unit">℃</span>
+                {% else %}
+                    —
+                {% endif %}
 
-{{ amedas.station_name }}
+            </div>
 
-｜
-観測時刻 {{ amedas.observed_at }}
+            <div class="home-meta">
 
-｜
-自宅から約{{ "%.1f"|format(amedas.distance_km) }}km
+                {% if home_forecast_time %}
+                    推定時刻 {{ home_forecast_time }}
+                {% endif %}
 
-</div>
+                {% if home_weather %}
+                    ｜{{ home_icon }} {{ home_weather }}
+                {% endif %}
 
-<div class="grid">
+            </div>
 
-<div class="metric">
+            <div class="note">
+                ※気象モデル（MET Norway）による自宅地点の推定値です。
+                自宅に温度計を設置した実測値ではありません。
+            </div>
 
-<div class="metric-label">
-気温
-</div>
+        </div>
 
-<div class="metric-value">
+    </section>
 
-{% if amedas.temperature is not none %}
-{{ "%.1f"|format(amedas.temperature) }}
-<span class="unit">℃</span>
-{% else %}
-—
-{% endif %}
 
-</div>
+    <!-- 周辺観測 -->
 
-</div>
+    <section class="section">
 
+        <div class="section-title">
+            現在の周辺観測
+        </div>
 
-<div class="metric">
+        <div class="observation">
 
-<div class="metric-label">
-湿度
-</div>
+            <div class="station">
 
-<div class="metric-value">
+                {% if amedas.ok %}
 
-{% if amedas.humidity is not none %}
-{{ "%.0f"|format(amedas.humidity) }}
-<span class="unit">%</span>
-{% else %}
-—
-{% endif %}
+                    {{ amedas.station }}
+                    ｜観測時刻
+                    {{ amedas.observed_at.strftime("%Y/%m/%d %H:%M") }}
 
-</div>
+                    {% if amedas.distance is not none %}
+                        ｜自宅から約
+                        {{ "%.1f"|format(amedas.distance) }}km
+                    {% endif %}
 
-</div>
+                {% else %}
 
+                    天城山 ｜ AMeDASデータ取得エラー
 
-<div class="metric">
+                {% endif %}
 
-<div class="metric-label">
-降水量（10分）
-</div>
+            </div>
 
-<div class="metric-value">
 
-{% if amedas.rain10 is not none %}
-{{ "%.1f"|format(amedas.rain10) }}
-<span class="unit">mm</span>
-{% else %}
-—
-{% endif %}
+            <div class="metrics">
 
-</div>
+                <div class="metric">
 
-</div>
+                    <div class="metric-label">
+                        気温
+                    </div>
 
+                    <div class="metric-value">
 
-<div class="metric">
+                        {% if amedas.temp is not none %}
+                            {{ "%.1f"|format(amedas.temp) }} ℃
+                        {% else %}
+                            —
+                        {% endif %}
 
-<div class="metric-label">
-風
-</div>
+                    </div>
 
-<div class="metric-value">
+                </div>
 
-{% if amedas.wind is not none %}
 
-{{ "%.1f"|format(amedas.wind) }}
+                <div class="metric">
 
-<span class="unit">m/s</span>
+                    <div class="metric-label">
+                        湿度
+                    </div>
 
-{% else %}
+                    <div class="metric-value">
 
-—
+                        {% if amedas.humidity is not none %}
+                            {{ "%.0f"|format(amedas.humidity) }} %
+                        {% else %}
+                            —
+                        {% endif %}
 
-{% endif %}
+                    </div>
 
-</div>
+                </div>
 
-<div class="metric-label">
 
-{{ jma_wind_direction(amedas.wind_direction) }}
+                <div class="metric">
 
-</div>
+                    <div class="metric-label">
+                        降水量（10分）
+                    </div>
 
-</div>
+                    <div class="metric-value">
 
-</div>
+                        {% if amedas.rain10 is not none %}
+                            {{ "%.1f"|format(amedas.rain10) }} mm
+                        {% else %}
+                            —
+                        {% endif %}
 
-<div class="note">
+                    </div>
 
-※現在値は気象庁AMeDASによる周辺観測です。<br>
+                </div>
 
-※自宅周辺と観測地点では、
-特に風・雨・霧などに差が出る場合があります。
 
-</div>
+                <div class="metric">
 
-{% else %}
+                    <div class="metric-label">
+                        風
+                    </div>
 
-<div class="error">
+                    <div class="metric-value">
 
-現在の観測データを取得できませんでした。<br>
+                        {% if amedas.wind is not none %}
+                            {{ "%.1f"|format(amedas.wind) }} m/s
+                        {% else %}
+                            —
+                        {% endif %}
 
-AMeDAS:
-{{ amedas.error }}
+                    </div>
 
-</div>
+                </div>
 
-{% endif %}
 
-</div>
+                <div class="metric">
 
+                    <div class="metric-label">
+                        風向
+                    </div>
 
-<!-- =====================================================
-     自宅気圧
-===================================================== -->
+                    <div class="metric-value">
 
-<div class="panel">
+                        {{ amedas.wind_direction }}
 
-<div class="panel-title">
-自宅地点の気圧
-</div>
+                    </div>
 
-<div class="pressure">
+                </div>
 
-<div>
+            </div>
 
-<div class="pressure-value">
 
-{% if current_pressure is not none %}
+            <div class="note">
+                ※現在値は気象庁AMeDASによる周辺観測です。<br>
+                ※自宅周辺と観測地点では、特に風・雨・霧などに差が出る場合があります。
+            </div>
 
-{{ "%.1f"|format(current_pressure) }}
+        </div>
 
-<span class="unit">hPa</span>
+    </section>
 
-{% else %}
 
-— <span class="unit">hPa</span>
+    <!-- 気圧 -->
 
-{% endif %}
+    <section class="section">
 
-</div>
+        <div class="section-title">
+            自宅地点の気圧
+        </div>
 
-<div class="pressure-label">
-標高約500mの自宅地点
-</div>
+        <div class="pressure">
 
-</div>
+            <div class="pressure-box">
 
+                <div class="pressure-label">
+                    標高約500mの自宅地点
+                </div>
 
-<div>
+                <div class="pressure-value">
 
-<div class="pressure-value"
-style="font-size:30px;">
+                    {% if home_surface_pressure is not none %}
 
-{% if current_sea_pressure is not none %}
+                        {{ "%.1f"|format(home_surface_pressure) }}
+                        hPa
 
-{{ "%.1f"|format(current_sea_pressure) }}
+                    {% else %}
 
-<span class="unit">hPa</span>
+                        —
 
-{% else %}
+                    {% endif %}
 
-— <span class="unit">hPa</span>
+                </div>
 
-{% endif %}
+            </div>
 
-</div>
 
-<div class="pressure-label">
-海面更正気圧
-</div>
+            <div class="pressure-box">
 
-</div>
+                <div class="pressure-label">
+                    海面更正気圧
+                </div>
 
-</div>
+                <div class="pressure-value">
 
+                    {% if home_sea_pressure is not none %}
 
-<div class="trend">
+                        {{ "%.1f"|format(home_sea_pressure) }}
+                        hPa
 
-<div class="trend-title">
+                    {% else %}
 
-{{ trend.icon }}
-{{ trend.title }}
+                        —
 
-</div>
+                    {% endif %}
 
-<div class="trend-text">
+                </div>
 
-{{ trend.text }}
+            </div>
 
-</div>
+        </div>
 
-</div>
 
-</div>
+        <div class="trend">
 
+            {% if home_surface_pressure is not none %}
 
-<!-- =====================================================
-     現在の気象状況
-===================================================== -->
+                {{ pressure_level_text }}
+                ｜{{ pressure_trend_text }}
 
-<div class="panel">
+            {% else %}
 
-<div class="panel-title">
-現在の気象状況
-</div>
+                気圧の傾向を判定できません
 
-<div class="alerts">
+            {% endif %}
 
-<div class="alert">
+        </div>
 
-<div class="alert-title">
+    </section>
 
-{{ current_status.icon }}
-{{ current_status.title }}
 
-</div>
+    <!-- 現在の気象状況 -->
 
-<div class="alert-text">
+    <section class="section">
 
-{{ current_status.text }}
+        <div class="section-title">
+            現在の気象状況
+        </div>
 
-</div>
+        <div class="status">
 
-</div>
+            <div class="status-main">
+                {{ weather_status }}
+            </div>
 
+            <div class="status-sub">
+                {{ weather_status_sub }}
+            </div>
 
-{% for alert in alerts %}
+        </div>
 
-<div class="alert">
+    </section>
 
-<div class="alert-title">
 
-{{ alert.icon }}
-{{ alert.title }}
+    <!-- 注意情報 -->
 
-</div>
+    {% if alerts %}
 
-<div class="alert-text">
+    <section class="section">
 
-{{ alert.text }}
+        <div class="section-title">
+            今後の注意情報
+        </div>
 
-</div>
+        {% for alert in alerts %}
 
-</div>
+            <div class="alert">
+                {{ alert }}
+            </div>
 
-{% endfor %}
+        {% endfor %}
 
-</div>
+    </section>
 
-</div>
+    {% endif %}
 
 
-<!-- =====================================================
-     24時間予報
-===================================================== -->
+    <!-- 24時間予報 -->
 
-<div class="panel">
+    <section class="section">
 
-<div class="panel-title">
-これから24時間
-</div>
+        <div class="section-title">
+            これから24時間
+        </div>
 
-<div style="
-color:#aaa1a4;
-font-size:12px;
-margin-bottom:15px;
-">
+        <div class="note">
+            奈良本・標高約500m地点の予報
+        </div>
 
-奈良本・標高約500m地点の予報
+        {% if forecasts %}
 
-</div>
+        <div class="forecast-wrap">
 
+            <div class="forecast">
 
-{% if forecasts %}
+                {% for item in forecasts %}
 
-<div class="forecast-scroll">
+                <div class="forecast-card">
 
-<div class="forecast">
+                    <div class="forecast-time">
+                        {{ item.dt.strftime("%H:%M") }}
+                    </div>
 
-{% for item in forecasts %}
+                    <div class="forecast-icon">
+                        {{ item.icon }}
+                    </div>
 
-<div class="card">
+                    <div class="forecast-temp">
 
-<div class="time">
-{{ item.time }}
-</div>
+                        {% if item.temperature is not none %}
+                            {{ "%.1f"|format(item.temperature) }}℃
+                        {% else %}
+                            —
+                        {% endif %}
 
-<div class="temp">
+                    </div>
 
-{% if item.temperature is not none %}
+                    <div class="forecast-weather">
+                        {{ item.weather }}
+                    </div>
 
-{{ "%.1f"|format(item.temperature) }}°
+                    <div class="forecast-rain">
 
-{% else %}
+                        ☔
 
-—
+                        {% if item.rain_probability is not none %}
+                            {{ "%.0f"|format(item.rain_probability) }}%
+                        {% else %}
+                            —
+                        {% endif %}
 
-{% endif %}
+                        {% if item.precipitation is not none %}
+                            ｜{{ "%.1f"|format(item.precipitation) }}mm
+                        {% endif %}
 
-</div>
+                    </div>
 
-<div class="weather">
+                </div>
 
-{{ item.icon }}
-{{ item.weather }}
+                {% endfor %}
 
-</div>
+            </div>
 
-<div class="rain">
+        </div>
 
-☔
+        {% else %}
 
-{% if item.rain_probability is not none %}
+            <div class="error">
+                自宅地点の予報データを取得できませんでした。
+            </div>
 
-{{ "%.0f"|format(item.rain_probability) }}%
+        {% endif %}
 
-{% else %}
+    </section>
 
-—
 
-{% endif %}
+    <!-- 気温グラフ -->
 
-｜
+    <section class="section">
 
-{% if item.precipitation is not none %}
+        <div class="section-title">
+            24時間の気温
+        </div>
 
-{{ "%.1f"|format(item.precipitation) }} mm
+        <div class="chart-box">
 
-{% else %}
+            <canvas id="temperatureChart"></canvas>
 
-— mm
+        </div>
 
-{% endif %}
+    </section>
 
-</div>
 
-<div class="wind">
+    <!-- 気圧グラフ -->
 
-{{ met_wind_direction(item.wind_direction) }}
+    <section class="section">
 
-{% if item.wind is not none %}
+        <div class="section-title">
+            24時間の気圧
+        </div>
 
-{{ "%.1f"|format(item.wind) }}m/s
+        <div class="chart-box">
 
-{% else %}
+            <canvas id="pressureChart"></canvas>
 
-—
+        </div>
 
-{% endif %}
+    </section>
 
-</div>
 
-</div>
+    <footer class="footer">
 
-{% endfor %}
+        奈良本｜標高 約500m
+        ｜24時間予報：MET Norway
 
-</div>
-
-</div>
-
-{% else %}
-
-<div class="error">
-
-自宅地点の予報データを取得できませんでした。
-
-</div>
-
-{% endif %}
-
-</div>
-
-
-<!-- =====================================================
-     気温
-===================================================== -->
-
-<div class="panel">
-
-<div class="panel-title">
-24時間の気温
-</div>
-
-<div class="chart">
-
-<canvas id="temperatureChart"></canvas>
-
-</div>
-
-</div>
-
-
-<!-- =====================================================
-     気圧
-===================================================== -->
-
-<div class="panel">
-
-<div class="panel-title">
-24時間の気圧
-</div>
-
-<div class="chart">
-
-<canvas id="pressureChart"></canvas>
-
-</div>
-
-</div>
-
-
-<div class="footer">
-
-奈良本｜標高 約500m
-｜
-24時間予報：MET Norway
-
-</div>
+    </footer>
 
 </div>
 
 
 <script>
 
-const labels =
-{{ chart_labels | safe }};
-
-const temperatures =
-{{ chart_temperatures | safe }};
-
-const pressures =
-{{ chart_pressures | safe }};
+const forecastLabels = {{ chart_labels | safe }};
+const temperatures = {{ chart_temperatures | safe }};
+const pressures = {{ chart_pressures | safe }};
 
 
 new Chart(
+    document.getElementById("temperatureChart"),
+    {
+        type: "line",
 
-document.getElementById(
-    "temperatureChart"
-),
+        data: {
+            labels: forecastLabels,
 
-{
+            datasets: [{
+                label: "気温 ℃",
+                data: temperatures,
+                tension: 0.35,
+                pointRadius: 2,
+                borderWidth: 2
+            }]
+        },
 
-type: "line",
+        options: {
 
-data: {
+            responsive: true,
 
-labels: labels,
+            maintainAspectRatio: false,
 
-datasets: [{
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
 
-label: "気温 ℃",
+            scales: {
 
-data: temperatures,
+                x: {
+                    ticks: {
+                        color: "#8d8587",
+                        maxTicksLimit: 12
+                    },
 
-tension: 0.35,
+                    grid: {
+                        color: "#302a2c"
+                    }
+                },
 
-pointRadius: 2,
+                y: {
+                    ticks: {
+                        color: "#8d8587"
+                    },
 
-borderWidth: 2
+                    grid: {
+                        color: "#302a2c"
+                    }
+                }
 
-}]
+            }
 
-},
+        }
 
-options: {
-
-responsive: true,
-
-maintainAspectRatio: false,
-
-plugins: {
-
-legend: {
-
-labels: {
-
-color: "#bdb4b7"
-
-}
-
-}
-
-},
-
-scales: {
-
-x: {
-
-ticks: {
-
-color: "#8f888b"
-
-},
-
-grid: {
-
-color: "#302b2d"
-
-}
-
-},
-
-y: {
-
-ticks: {
-
-color: "#8f888b"
-
-},
-
-grid: {
-
-color: "#302b2d"
-
-}
-
-}
-
-}
-
-}
-
-}
-
+    }
 );
 
 
 new Chart(
+    document.getElementById("pressureChart"),
+    {
+        type: "line",
 
-document.getElementById(
-    "pressureChart"
-),
+        data: {
+            labels: forecastLabels,
 
-{
+            datasets: [{
+                label: "自宅地点の気圧 hPa",
+                data: pressures,
+                tension: 0.35,
+                pointRadius: 2,
+                borderWidth: 2
+            }]
+        },
 
-type: "line",
+        options: {
 
-data: {
+            responsive: true,
 
-labels: labels,
+            maintainAspectRatio: false,
 
-datasets: [{
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
 
-label:
-"自宅地点の推定気圧 hPa",
+            scales: {
 
-data: pressures,
+                x: {
+                    ticks: {
+                        color: "#8d8587",
+                        maxTicksLimit: 12
+                    },
 
-tension: 0.35,
+                    grid: {
+                        color: "#302a2c"
+                    }
+                },
 
-pointRadius: 2,
+                y: {
+                    ticks: {
+                        color: "#8d8587"
+                    },
 
-borderWidth: 2
+                    grid: {
+                        color: "#302a2c"
+                    }
+                }
 
-}]
+            }
 
-},
+        }
 
-options: {
-
-responsive: true,
-
-maintainAspectRatio: false,
-
-plugins: {
-
-legend: {
-
-labels: {
-
-color: "#bdb4b7"
-
-}
-
-}
-
-},
-
-scales: {
-
-x: {
-
-ticks: {
-
-color: "#8f888b"
-
-},
-
-grid: {
-
-color: "#302b2d"
-
-}
-
-},
-
-y: {
-
-ticks: {
-
-color: "#8f888b"
-
-},
-
-grid: {
-
-color: "#302b2d"
-
-}
-
-}
-
-}
-
-}
-
-}
-
+    }
 );
 
 </script>
 
 </body>
-
 </html>
 """
 
 
-# =========================================================
-# Flask
-# =========================================================
+# ============================================================
+# メイン
+# ============================================================
 
 @app.route("/")
 def index():
 
-    now = datetime.now(
-        JST
-    ).strftime(
-        "%Y/%m/%d %H:%M"
-    )
+    now = jst_now()
 
-    # 現在の実測
     amedas = get_amedas()
 
-    # 自宅予報
-    met_data = get_met_forecast()
+    met_json = get_met_forecast()
 
-    forecasts = build_forecasts(
-        met_data
+    all_forecasts = build_forecasts(
+        met_json
     )
 
-    # 現在の自宅地点気圧
-    current_pressure = None
-    current_sea_pressure = None
 
-    if forecasts:
+    # --------------------------------------------------------
+    # 現在に最も近い自宅予報
+    # --------------------------------------------------------
 
-        current_pressure = forecasts[0].get(
-            "surface_pressure"
-        )
-
-        current_sea_pressure = forecasts[0].get(
-            "sea_pressure"
-        )
-
-    trend = pressure_trend(
-        forecasts
+    current_forecast = nearest_forecast(
+        all_forecasts
     )
+
+    home_temp = None
+    home_surface_pressure = None
+    home_sea_pressure = None
+    home_weather = None
+    home_icon = "🌤️"
+    home_forecast_time = None
+
+    if current_forecast:
+
+        home_temp = current_forecast[
+            "temperature"
+        ]
+
+        home_surface_pressure = (
+            current_forecast[
+                "surface_pressure"
+            ]
+        )
+
+        home_sea_pressure = (
+            current_forecast[
+                "sea_pressure"
+            ]
+        )
+
+        home_weather = current_forecast[
+            "weather"
+        ]
+
+        home_icon = current_forecast[
+            "icon"
+        ]
+
+        home_forecast_time = (
+            current_forecast["dt"]
+            .strftime("%Y/%m/%d %H:%M")
+        )
+
+
+    # --------------------------------------------------------
+    # これから24時間
+    # --------------------------------------------------------
+
+    end_time = now + timedelta(
+        hours=24
+    )
+
+    forecasts = [
+        item
+        for item in all_forecasts
+        if now - timedelta(minutes=30)
+        <= item["dt"]
+        <= end_time
+    ]
+
+
+    # 同じ時間帯の重複を避ける
+    unique = []
+
+    seen = set()
+
+    for item in forecasts:
+
+        key = item["dt"].strftime(
+            "%Y%m%d%H"
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(item)
+
+    forecasts = unique[:24]
+
+
+    # --------------------------------------------------------
+    # 気圧
+    # --------------------------------------------------------
+
+    pressure_trend_text = pressure_trend(
+        all_forecasts
+    )
+
+    pressure_level_text = pressure_level(
+        home_surface_pressure
+    )
+
+
+    # --------------------------------------------------------
+    # 現在の気象状況
+    # --------------------------------------------------------
+
+    (
+        weather_status,
+        weather_status_sub
+    ) = current_weather_status(
+        amedas
+    )
+
+
+    # --------------------------------------------------------
+    # 注意情報
+    # --------------------------------------------------------
 
     alerts = build_alerts(
         forecasts
     )
 
-    status = current_status(
-        amedas
-    )
+
+    # --------------------------------------------------------
+    # グラフ
+    # --------------------------------------------------------
 
     chart_labels = [
-        x["time"]
-        for x in forecasts
+        item["dt"].strftime("%H:%M")
+        for item in forecasts
     ]
 
     chart_temperatures = [
-        x["temperature"]
-        for x in forecasts
+        item["temperature"]
+        for item in forecasts
     ]
 
     chart_pressures = [
-        x["surface_pressure"]
-        for x in forecasts
+        item["surface_pressure"]
+        for item in forecasts
     ]
 
-    return render_template_string(
 
+    # --------------------------------------------------------
+    # METエラーを小さく表示
+    # --------------------------------------------------------
+
+    met_error = None
+
+    if met_json is None:
+        met_error = (
+            "自宅地点の予報データを取得できませんでした。"
+        )
+
+
+    return render_template_string(
         HTML,
 
-        now=now,
+        updated=now.strftime(
+            "%Y/%m/%d %H:%M"
+        ),
 
         amedas=amedas,
 
-        current_pressure=
-            current_pressure,
+        home_temp=home_temp,
+        home_surface_pressure=(
+            home_surface_pressure
+        ),
+        home_sea_pressure=(
+            home_sea_pressure
+        ),
+        home_weather=home_weather,
+        home_icon=home_icon,
+        home_forecast_time=(
+            home_forecast_time
+        ),
 
-        current_sea_pressure=
-            current_sea_pressure,
+        pressure_trend_text=(
+            pressure_trend_text
+        ),
 
-        trend=trend,
+        pressure_level_text=(
+            pressure_level_text
+        ),
+
+        weather_status=(
+            weather_status
+        ),
+
+        weather_status_sub=(
+            weather_status_sub
+        ),
 
         alerts=alerts,
 
-        current_status=status,
-
         forecasts=forecasts,
 
-        chart_labels=
-            chart_labels,
+        chart_labels=(
+            str(chart_labels)
+            .replace("'", '"')
+        ),
 
-        chart_temperatures=
-            chart_temperatures,
+        chart_temperatures=(
+            str(chart_temperatures)
+            .replace("'", '"')
+        ),
 
-        chart_pressures=
-            chart_pressures,
+        chart_pressures=(
+            str(chart_pressures)
+            .replace("'", '"')
+        ),
 
-        jma_wind_direction=
-            jma_wind_direction,
-
-        met_wind_direction=
-            met_wind_direction,
+        met_error=met_error,
     )
 
+
+# ============================================================
+# Render / Gunicorn
+# ============================================================
 
 if __name__ == "__main__":
 
     app.run(
         host="0.0.0.0",
-        port=5000,
-        debug=False
+        port=int(
+            os.environ.get(
+                "PORT",
+                5000
+            )
+        )
     )
