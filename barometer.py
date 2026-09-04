@@ -5,14 +5,13 @@ import os
 
 app = Flask(__name__)
 
-# 🏡 東伊豆町奈良本（標高500m）の正確な位置
+# 🏡 東伊豆町奈良本（標高500m）の位置
 LAT = 34.8156
 LON = 139.0684
-ELEVATION_DROP = 55.0  # 標高500m分の気圧減少補正 (hPa)
+ELEVATION_DROP = 55.0
 
 def get_real_weather_data():
     try:
-        # 🌟URLの形式を最もシンプルに整え、確実にお天気データを取得します
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
         res = requests.get(url, timeout=10)
         
@@ -32,8 +31,10 @@ def get_real_weather_data():
                 df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
                 df['Temp'] = round(df['Temp'], 1)
                 
-                # 🌟【重要】今現在の日本時間に合わせて、お昼以降のデータをぴったり切り出します
-                now = pd.Timestamp.now().floor('h')
+                # 🌟【ここを修正！】世界標準時に「9時間」を足して、サーバーの時間を日本の時間に強制一致させます！
+                now = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
+                
+                # 日本の時間に変換したタイムテーブルから、今現在の時間以降を切り出す
                 df_filtered = df[df['Time'] >= now]
                 
                 if not df_filtered.empty:
@@ -63,9 +64,9 @@ def get_weather_string(code):
 def index():
     df = get_real_weather_data()
     
-    # 🌟万が一データが取れなかった場合も、今のお昼の時間（13:00など）から時間が進むように修正
+    # 🌟万が一の通信エラー時も、時差を考慮してお昼の時間から進むように修正
     if df is None or df.empty:
-        now_time = pd.Timestamp.now().floor('h')
+        now_time = (pd.Timestamp.utcnow() + pd.Timedelta(hours=9)).floor('h')
         fallback_data = []
         for i in range(24):
             fallback_data.append({
