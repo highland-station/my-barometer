@@ -1,11 +1,16 @@
-from flask import Flaskimport requestsimport pandas as pdimport os
+from flask import Flask
+import requests
+import pandas as pd
+import os
 app = Flask(__name__)
-# 🏡 東伊豆町奈良本LAT = 34.8156LON = 139.0684
+# 🏡 東伊豆町奈良本
+LAT = 34.8156
+LON = 139.0684
 def get_real_weather_data():
     try:
         # 🌟 チャットGPTのアドバイス通り、elevation=500を指定し、surface_pressureも同時に取得
         url = (
-            "https://open-meteo.com"
+            "https://api.open-meteo.com/v1/forecast"
             f"?latitude={LAT}&longitude={LON}&elevation=500"
             "&hourly=pressure_msl,surface_pressure,weather_code,temperature_2m,relative_humidity_2m,precipitation"
             "&timezone=Asia%2FTokyo"
@@ -33,6 +38,7 @@ def get_real_weather_data():
                 df['Press_MSL'] = round(df['Press_MSL'], 1)
                 df['Press_500m'] = round(df['Press_500m'], 1)
                 df['Temp_500m'] = round(df['Temp_500m'], 1)
+                df["Humi"] = df["Humi"].round().astype(int)
                 
                 now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
                 df_filtered = df[df['Time'] >= now]
@@ -56,7 +62,8 @@ def get_weather_string(code):
     elif c == 95 or c == 96 or c == 99: return "⚡ 雷雨"
     return "☁️ くもり"
 
-@app.route('/')def index():
+@app.route("/")
+def index():
     df = get_real_weather_data()
     
     is_fallback = False
@@ -183,6 +190,12 @@ def get_weather_string(code):
                     <div class="current-item" style="color: #93c5fd;"><div class="current-label" style="color:#60a5fa;">現地（標高500m実態）</div></div>
                     <div class="current-item"><div class="sub-label">地表気圧</div><div class="current-val" style="color:#fbbf24;">{current_press_500m} hPa</div></div>
                     <div class="current-item"><div class="sub-label">気温</div><div class="current-val" style="color:#f87171;">{current_temp_500m}℃</div></div>
+<div class="current-item">
+    <div class="sub-label">湿度</div>
+    <div class="current-val" style="color:#60a5fa;">
+        {current_humi}%
+    </div>
+</div>
                     <div class="current-item" style="display:flex; flex-direction:column; justify-content:center; border-left:1px solid #374151;">
                         <div class="sub-label">降水量</div><div class="current-val" style="color:#34d399;">{current_rain}mm</div>
                     </div>
@@ -190,9 +203,29 @@ def get_weather_string(code):
             </div>
 
 
-{message}
-'''
+            <div class="alert-banner">{message}</div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>時間</th>
+                        <th>気圧</th>
+                        <th>天気</th>
+                        <th>気温</th>
+                        <th>湿度</th>
+                        <th>雨量</th>
+                        <th>状況</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows_html}
+                </tbody>
+            </table>
+        </div>
+    </body>
+    </html>
+    '''
 port = int(os.environ.get("PORT", 5000))
 wsgi_app = app.wsgi_app
-if name == 'main':
-app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=port)
