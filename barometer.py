@@ -1,133 +1,109 @@
 from flask import Flask, render_template_string
 import requests
-from datetime import datetime
-from functools import lru_cache
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
-# ============================================================
-# 伊豆熱川・自宅付近
-# 1489番地の公開地図座標を基準に設定
-# ============================================================
-HOME_LAT = 34.8345956
-HOME_LON = 139.0481289
+# =========================================================
+# 自宅地点
+# =========================================================
+HOME_LAT = 34.8346
+HOME_LON = 139.0481
+HOME_ALTITUDE = 500
 
-# Open-Meteo
-WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
+# MET Norway API
+API_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
 
+# MET NorwayはUser-Agentを必須としている
 HEADERS = {
-    "User-Agent": "IzuAtagawaWeather/1.0"
+    "User-Agent": "IzuHomeWeather/1.0 https://github.com/highland-station/my-barometer"
+}
+
+JST = timezone(timedelta(hours=9))
+
+
+# =========================================================
+# 天気表示
+# =========================================================
+WEATHER = {
+    "clearsky": "快晴",
+    "fair": "晴れ",
+    "partlycloudy": "晴れ時々くもり",
+    "cloudy": "くもり",
+    "lightrain": "小雨",
+    "rain": "雨",
+    "heavyrain": "強い雨",
+    "lightsleet": "みぞれ",
+    "sleet": "みぞれ",
+    "heavysleet": "強いみぞれ",
+    "lightsnow": "小雪",
+    "snow": "雪",
+    "heavysnow": "大雪",
+    "rainshowers": "にわか雨",
+    "heavyrainshowers": "強いにわか雨",
+    "lightsleetshowers": "にわかみぞれ",
+    "sleetshowers": "にわかみぞれ",
+    "heavysleetshowers": "強いにわかみぞれ",
+    "snowshowers": "にわか雪",
+    "heavysnowshowers": "強いにわか雪",
+    "fog": "霧",
+    "lightsleetshowersandthunder": "雷雨",
+    "rainshowersandthunder": "雷雨",
+    "heavyrainshowersandthunder": "激しい雷雨",
+    "rainandthunder": "雷雨",
+    "heavyrainandthunder": "激しい雷雨",
+    "snowandthunder": "雷雪",
+    "sleetandthunder": "雷雨",
 }
 
 
-# ============================================================
-# 天気コード → 日本語
-# ============================================================
-def weather_text(code):
-    codes = {
-        0: "快晴",
-        1: "晴れ",
-        2: "晴れ時々くもり",
-        3: "くもり",
-        45: "霧",
-        48: "霧",
-        51: "弱い霧雨",
-        53: "霧雨",
-        55: "強い霧雨",
-        56: "凍る霧雨",
-        57: "強い凍る霧雨",
-        61: "弱い雨",
-        63: "雨",
-        65: "強い雨",
-        66: "凍る雨",
-        67: "強い凍る雨",
-        71: "弱い雪",
-        73: "雪",
-        75: "強い雪",
-        77: "雪あられ",
-        80: "にわか雨",
-        81: "にわか雨",
-        82: "強いにわか雨",
-        85: "にわか雪",
-        86: "強いにわか雪",
-        95: "雷雨",
-        96: "雷雨・ひょう",
-        99: "強い雷雨・ひょう",
-    }
-    return codes.get(code, "—")
+def weather_name(symbol):
+    if not symbol:
+        return "—"
+
+    # day / night / polarday を取り除く
+    base = symbol.split("_")[0]
+    return WEATHER.get(base, "—")
 
 
-def weather_icon(code, is_day=True):
-    if code == 0:
-        return "☀"
-    if code == 1:
-        return "☀"
-    if code == 2:
-        return "◐"
-    if code == 3:
-        return "☁"
-    if code in [45, 48]:
-        return "≋"
-    if code in [51, 53, 55, 56, 57]:
-        return "☂"
-    if code in [61, 63, 65, 66, 67, 80, 81, 82]:
-        return "☂"
-    if code in [71, 73, 75, 77, 85, 86]:
-        return "❄"
-    if code in [95, 96, 99]:
-        return "⚡"
+def wind_direction(degrees):
+    if degrees is None:
+        return "—"
 
-    return "☁"
+    directions = [
+        "北", "北北東", "北東", "東北東",
+        "東", "東南東", "南東", "南南東",
+        "南", "南南西", "南西", "西南西",
+        "西", "西北西", "北西", "北北西"
+    ]
+
+    index = int((degrees + 11.25) / 22.5) % 16
+    return directions[index]
 
 
-# ============================================================
-# Open-Meteo取得
-# ============================================================
-@lru_cache(maxsize=1)
+def get_value(data, key, default=None):
+    try:
+        value = data.get(key)
+        if value is None:
+            return default
+        return value
+    except Exception:
+        return default
+
+
+# =========================================================
+# MET Norwayから取得
+# =========================================================
 def get_weather():
 
     params = {
-        "latitude": HOME_LAT,
-        "longitude": HOME_LON,
-
-        "current": ",".join([
-            "temperature_2m",
-            "relative_humidity_2m",
-            "apparent_temperature",
-            "precipitation",
-            "rain",
-            "weather_code",
-            "cloud_cover",
-            "wind_speed_10m",
-            "wind_direction_10m",
-            "surface_pressure",
-            "pressure_msl",
-        ]),
-
-        "hourly": ",".join([
-            "temperature_2m",
-            "apparent_temperature",
-            "relative_humidity_2m",
-            "precipitation_probability",
-            "precipitation",
-            "rain",
-            "weather_code",
-            "cloud_cover",
-            "wind_speed_10m",
-            "wind_direction_10m",
-            "surface_pressure",
-            "pressure_msl",
-        ]),
-
-        "forecast_days": 2,
-        "timezone": "Asia/Tokyo",
-
-        "wind_speed_unit": "ms",
-        "precipitation_unit": "mm",
+        "lat": round(HOME_LAT, 4),
+        "lon": round(HOME_LON, 4),
+        "altitude": HOME_ALTITUDE,
     }
 
     response = requests.get(
-        WEATHER_URL,
+        API_URL,
         params=params,
         headers=HEADERS,
         timeout=20
@@ -138,163 +114,114 @@ def get_weather():
     return response.json()
 
 
-# ============================================================
-# 時刻フォーマット
-# ============================================================
-def hour_label(value):
-    try:
-        dt = datetime.fromisoformat(value)
-        return f"{dt.hour}時"
-    except Exception:
-        return value
+# =========================================================
+# データ整形
+# =========================================================
+def build_weather():
 
+    data = get_weather()
 
-# ============================================================
-# 風向
-# ============================================================
-def wind_direction(degree):
+    timeseries = data["properties"]["timeseries"]
 
-    if degree is None:
-        return "—"
+    now = datetime.now(JST)
 
-    directions = [
-        "北", "北北東", "北東", "東北東",
-        "東", "東南東", "南東", "南南東",
-        "南", "南南西", "南西", "西南西",
-        "西", "西北西", "北西", "北北西"
+    records = []
+
+    for item in timeseries:
+
+        dt = datetime.fromisoformat(
+            item["time"].replace("Z", "+00:00")
+        ).astimezone(JST)
+
+        instant = item["data"].get("instant", {}).get("details", {})
+
+        next1 = item["data"].get("next_1_hours", {})
+        next6 = item["data"].get("next_6_hours", {})
+
+        details1 = next1.get("details", {})
+        details6 = next6.get("details", {})
+
+        symbol = None
+
+        if "summary" in next1:
+            symbol = next1["summary"].get("symbol_code")
+
+        if not symbol and "summary" in next6:
+            symbol = next6["summary"].get("symbol_code")
+
+        record = {
+            "time": dt,
+            "temp": get_value(instant, "air_temperature"),
+            "humidity": get_value(instant, "relative_humidity"),
+            "pressure": get_value(
+                instant,
+                "air_pressure_at_sea_level"
+            ),
+            "surface_pressure": get_value(
+                instant,
+                "surface_air_pressure"
+            ),
+            "wind": get_value(instant, "wind_speed"),
+            "wind_dir": get_value(instant, "wind_from_direction"),
+            "precip": get_value(
+                details1,
+                "precipitation_amount",
+                get_value(details6, "precipitation_amount")
+            ),
+            "pop": get_value(
+                details1,
+                "probability_of_precipitation",
+                get_value(details6, "probability_of_precipitation")
+            ),
+            "symbol": symbol,
+        }
+
+        records.append(record)
+
+    # 現在に一番近い時刻
+    current = min(
+        records,
+        key=lambda x: abs((x["time"] - now).total_seconds())
+    )
+
+    # 現在から24時間
+    future = [
+        x for x in records
+        if x["time"] >= now - timedelta(hours=1)
     ]
 
-    index = int((degree + 11.25) / 22.5) % 16
+    future = future[:25]
 
-    return directions[index]
-
-
-# ============================================================
-# メイン画面
-# ============================================================
-@app.route("/")
-def index():
-
-    try:
-        data = get_weather()
-
-        current = data["current"]
-        hourly = data["hourly"]
-
-        current_time = current["time"]
-
-        # --------------------------------------------
-        # 現在値
-        # --------------------------------------------
-        temperature = current.get("temperature_2m")
-        humidity = current.get("relative_humidity_2m")
-        apparent = current.get("apparent_temperature")
-        precipitation = current.get("precipitation")
-        weather_code = current.get("weather_code")
-
-        wind_speed = current.get("wind_speed_10m")
-        wind_degree = current.get("wind_direction_10m")
-
-        surface_pressure = current.get("surface_pressure")
-        pressure_msl = current.get("pressure_msl")
-
-        # --------------------------------------------
-        # 24時間予報
-        # --------------------------------------------
-        times = hourly["time"]
-
-        # 現在時刻に一番近いインデックス
-        current_index = 0
-
-        for i, t in enumerate(times):
-            if t >= current_time:
-                current_index = i
-                break
-
-        forecast = []
-
-        for i in range(
-            current_index,
-            min(current_index + 24, len(times))
-        ):
-
-            code = hourly["weather_code"][i]
-
-            forecast.append({
-                "time": hour_label(times[i]),
-                "temperature": hourly["temperature_2m"][i],
-                "humidity": hourly["relative_humidity_2m"][i],
-                "rain_probability": hourly["precipitation_probability"][i],
-                "precipitation": hourly["precipitation"][i],
-                "weather": weather_text(code),
-                "icon": weather_icon(code),
-                "wind": hourly["wind_speed_10m"][i],
-                "pressure": hourly["surface_pressure"][i],
-            })
-
-        # --------------------------------------------
-        # グラフ用
-        # --------------------------------------------
-        chart_labels = [
-            item["time"] for item in forecast
-        ]
-
-        chart_temperature = [
-            item["temperature"] for item in forecast
-        ]
-
-        chart_rain = [
-            item["rain_probability"] for item in forecast
-        ]
-
-        return render_template_string(
-            HTML,
-            temperature=temperature,
-            humidity=humidity,
-            apparent=apparent,
-            precipitation=precipitation,
-            weather=weather_text(weather_code),
-            icon=weather_icon(weather_code),
-            wind_speed=wind_speed,
-            wind_direction=wind_direction(wind_degree),
-            surface_pressure=surface_pressure,
-            pressure_msl=pressure_msl,
-            forecast=forecast,
-            chart_labels=chart_labels,
-            chart_temperature=chart_temperature,
-            chart_rain=chart_rain,
-            current_time=current_time
-        )
-
-    except Exception as e:
-
-        return render_template_string(
-            ERROR_HTML,
-            error=str(e)
-        )
+    return current, future
 
 
-# ============================================================
+# =========================================================
 # HTML
-# ============================================================
+# =========================================================
 HTML = r"""
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-
 <meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
 
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
-
-<title>伊豆熱川 Weather</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>奈良本の空</title>
 
 <style>
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap');
+
+:root {
+    --bg: #171517;
+    --panel: #211e21;
+    --panel2: #252124;
+    --text: #eee8e8;
+    --muted: #a89ea2;
+    --rose: #c59aa6;
+    --rose2: #8f6875;
+    --line: rgba(197,154,166,.20);
+}
 
 * {
     box-sizing: border-box;
@@ -304,574 +231,458 @@ body {
     margin: 0;
     background:
         radial-gradient(
-            circle at 15% 0%,
-            #38262e 0%,
-            #171416 42%,
-            #101011 100%
+            circle at 75% 5%,
+            rgba(151,91,111,.15),
+            transparent 32%
+        ),
+        linear-gradient(
+            135deg,
+            #151315 0%,
+            #1a1719 50%,
+            #121113 100%
         );
-
-    color: #eee8e9;
-
+    color: var(--text);
     font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        "Hiragino Kaku Gothic ProN",
-        "Yu Gothic",
+        "Noto Sans JP",
         sans-serif;
-
+    font-weight: 300;
     min-height: 100vh;
 }
 
-.container {
-    max-width: 1180px;
-    margin: auto;
-    padding: 38px 28px 60px;
+.wrapper {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 44px 34px 60px;
 }
 
 
-/* ------------------------------------------------
-   LOCATION
------------------------------------------------- */
+/* -----------------------------------------
+   Header
+----------------------------------------- */
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
 
 .location {
-    color: #cfa7b1;
     font-size: 13px;
-    letter-spacing: 0.18em;
-    margin-bottom: 22px;
+    letter-spacing: .18em;
+    color: var(--muted);
+}
+
+.location strong {
+    display: block;
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: .08em;
+    margin-top: 6px;
+}
+
+.updated {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .08em;
 }
 
 
-/* ------------------------------------------------
-   CURRENT
------------------------------------------------- */
+/* -----------------------------------------
+   Main atmosphere
+----------------------------------------- */
 
-.current {
-    position: relative;
-
-    padding: 38px;
-
-    border-radius: 28px;
-
-    background:
-        linear-gradient(
-            135deg,
-            rgba(111, 58, 72, 0.45),
-            rgba(29, 25, 27, 0.82)
-        );
-
-    border: 1px solid rgba(219, 160, 176, 0.18);
-
-    box-shadow:
-        0 30px 80px rgba(0,0,0,.35);
-
-    overflow: hidden;
+.hero {
+    display: grid;
+    grid-template-columns: 1.3fr .7fr;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
 }
 
-.current::after {
-    content: "";
-
-    position: absolute;
-
-    width: 260px;
-    height: 260px;
-
-    right: -90px;
-    top: -90px;
-
-    border-radius: 50%;
-
+.hero-main {
     background:
         radial-gradient(
-            circle,
-            rgba(192, 112, 135, .28),
-            transparent 70%
-        );
+            circle at 70% 40%,
+            rgba(197,154,166,.11),
+            transparent 38%
+        ),
+        var(--panel);
+    padding: 48px;
+    min-height: 300px;
 }
 
-.current-grid {
-    display: grid;
-
-    grid-template-columns:
-        1.25fr
-        1fr;
-
-    gap: 35px;
-
-    position: relative;
-    z-index: 1;
-}
-
-.current-main {
+.hero-side {
+    background: var(--panel);
+    padding: 42px;
     display: flex;
     flex-direction: column;
     justify-content: center;
 }
 
-.weather-icon {
-    font-size: 54px;
-    color: #d8a5b2;
-    margin-bottom: 10px;
+.current-label {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: .18em;
+    margin-bottom: 18px;
 }
 
 .temperature {
-    font-size: 76px;
-    line-height: 1;
-
-    font-weight: 300;
-
-    letter-spacing: -0.05em;
+    font-family: "Playfair Display", serif;
+    font-size: clamp(76px, 10vw, 132px);
+    line-height: .9;
+    letter-spacing: -.04em;
+    font-weight: 400;
 }
 
 .temperature span {
-    font-size: 27px;
-    margin-left: 5px;
-
-    color: #b9afb2;
+    font-family: "Noto Sans JP", sans-serif;
+    font-size: 24px;
+    color: var(--muted);
+    margin-left: 7px;
 }
 
-.weather-name {
-    margin-top: 14px;
-
-    font-size: 20px;
-
-    color: #e4cdd2;
+.weather {
+    font-size: 22px;
+    margin-top: 20px;
+    letter-spacing: .08em;
 }
 
 .feels {
-    margin-top: 8px;
-
-    color: #938b8d;
-
-    font-size: 13px;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 10px;
 }
 
-
-/* ------------------------------------------------
-   METRICS
------------------------------------------------- */
-
-.metrics {
-
+.metric-list {
     display: grid;
-
-    grid-template-columns:
-        1fr
-        1fr;
-
-    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px 32px;
 }
 
 .metric {
-
-    padding: 20px 21px;
-
-    border-radius: 18px;
-
-    background: rgba(255,255,255,.045);
-
-    border:
-        1px solid
-        rgba(255,255,255,.07);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 15px;
 }
 
 .metric-label {
-
+    color: var(--muted);
     font-size: 11px;
-
-    color: #948c8f;
-
-    letter-spacing: .13em;
-
+    letter-spacing: .12em;
     margin-bottom: 7px;
 }
 
 .metric-value {
-
-    font-size: 19px;
-
-    color: #eee6e8;
+    font-family: "Playfair Display", serif;
+    font-size: 28px;
 }
 
-.pressure-box {
-
-    grid-column: 1 / -1;
-
-    padding: 22px;
-
-    border-radius: 18px;
-
-    background:
-        linear-gradient(
-            135deg,
-            rgba(143, 76, 94, .25),
-            rgba(255,255,255,.035)
-        );
-
-    border:
-        1px solid
-        rgba(211,151,168,.15);
+.metric-unit {
+    font-family: "Noto Sans JP", sans-serif;
+    color: var(--muted);
+    font-size: 11px;
+    margin-left: 3px;
 }
 
-.pressure-values {
 
+/* -----------------------------------------
+   Pressure
+----------------------------------------- */
+
+.pressure-section {
+    margin-top: 1px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 30px 42px;
+}
+
+.pressure-title {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: .18em;
+    margin-bottom: 18px;
+}
+
+.pressures {
     display: flex;
-
-    gap: 28px;
-
     align-items: baseline;
+    gap: 34px;
 }
 
-.pressure-number {
-
-    font-size: 29px;
-
-    font-weight: 300;
+.pressure-main {
+    font-family: "Playfair Display", serif;
+    font-size: 42px;
 }
 
-.pressure-number span {
-
-    font-size: 12px;
-
-    color: #a69b9e;
+.pressure-secondary {
+    font-family: "Playfair Display", serif;
+    font-size: 27px;
+    color: var(--rose);
 }
 
 
-/* ------------------------------------------------
-   SECTION
------------------------------------------------- */
+/* -----------------------------------------
+   24 hour
+----------------------------------------- */
 
 .section {
+    margin-top: 36px;
+}
 
-    margin-top: 28px;
-
-    padding: 27px;
-
-    border-radius: 24px;
-
-    background:
-        rgba(24,21,23,.78);
-
-    border:
-        1px solid
-        rgba(255,255,255,.065);
+.section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+    margin-bottom: 1px;
 }
 
 .section-title {
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: space-between;
-
-    margin-bottom: 22px;
-}
-
-.section-title h2 {
-
-    margin: 0;
-
-    font-size: 16px;
-
-    font-weight: 400;
-
-    letter-spacing: .12em;
-}
-
-.section-title span {
-
-    font-size: 11px;
-
-    color: #80777a;
-}
-
-
-/* ------------------------------------------------
-   FORECAST
------------------------------------------------- */
-
-.forecast {
-
-    display: flex;
-
-    gap: 9px;
-
-    overflow-x: auto;
-
-    padding-bottom: 7px;
-
-    scrollbar-width: thin;
-}
-
-.forecast-card {
-
-    min-width: 92px;
-
-    padding: 17px 10px;
-
-    text-align: center;
-
-    border-radius: 17px;
-
-    background:
-        linear-gradient(
-            180deg,
-            rgba(255,255,255,.055),
-            rgba(255,255,255,.025)
-        );
-
-    border:
-        1px solid
-        rgba(255,255,255,.055);
-}
-
-.forecast-card:first-child {
-
-    background:
-        linear-gradient(
-            180deg,
-            rgba(139,76,94,.38),
-            rgba(255,255,255,.035)
-        );
-
-    border-color:
-        rgba(211,151,168,.25);
-}
-
-.forecast-time {
-
-    color: #aaa1a4;
-
-    font-size: 11px;
-
-    margin-bottom: 13px;
-}
-
-.forecast-icon {
-
+    font-family: "Playfair Display", serif;
     font-size: 25px;
-
-    height: 34px;
-
-    color: #d3a2af;
 }
 
-.forecast-temp {
-
-    font-size: 20px;
-
-    margin-top: 8px;
-}
-
-.forecast-rain {
-
-    margin-top: 8px;
-
+.section-sub {
+    color: var(--muted);
     font-size: 11px;
-
-    color: #b98493;
 }
 
-.forecast-mm {
+.timeline-wrap {
+    border: 1px solid var(--line);
+    border-top: none;
+    overflow-x: auto;
+    background: var(--panel);
+}
 
-    margin-top: 4px;
+.timeline {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 108px;
+    min-width: max-content;
+}
 
+.hour {
+    padding: 20px 14px 23px;
+    border-right: 1px solid var(--line);
+    text-align: center;
+}
+
+.hour.now {
+    background: rgba(197,154,166,.08);
+}
+
+.hour-time {
+    color: var(--muted);
+    font-size: 11px;
+    margin-bottom: 15px;
+}
+
+.hour-temp {
+    font-family: "Playfair Display", serif;
+    font-size: 25px;
+}
+
+.hour-weather {
+    height: 37px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--rose);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hour-rain {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 9px;
+}
+
+.hour-wind {
     font-size: 10px;
-
-    color: #746d70;
+    color: var(--muted);
+    margin-top: 13px;
 }
 
 
-/* ------------------------------------------------
-   CHART
------------------------------------------------- */
+/* -----------------------------------------
+   Graph
+----------------------------------------- */
 
-.chart-wrap {
+.graph {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    padding: 25px;
+}
 
-    height: 270px;
-
-    position: relative;
+canvas {
+    width: 100%;
+    height: 250px;
 }
 
 
-/* ------------------------------------------------
-   FOOTER
------------------------------------------------- */
+/* -----------------------------------------
+   Footer
+----------------------------------------- */
 
 .footer {
-
-    text-align: center;
-
-    margin-top: 26px;
-
-    color: #615b5d;
-
+    margin-top: 35px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    color: #746c70;
     font-size: 10px;
-
-    letter-spacing: .08em;
+    line-height: 1.8;
 }
 
 
-/* ------------------------------------------------
-   MOBILE
------------------------------------------------- */
+/* -----------------------------------------
+   Mobile
+----------------------------------------- */
 
 @media (max-width: 760px) {
 
-    .container {
-        padding: 20px 14px 40px;
+    .wrapper {
+        padding: 25px 16px 40px;
     }
 
-    .current {
-        padding: 25px 20px;
-        border-radius: 23px;
+    .header {
+        align-items: flex-start;
     }
 
-    .current-grid {
+    .hero {
         grid-template-columns: 1fr;
-        gap: 25px;
+    }
+
+    .hero-main {
+        padding: 35px 27px;
+    }
+
+    .hero-side {
+        padding: 30px 27px;
+    }
+
+    .pressure-section {
+        padding: 25px 27px;
+    }
+
+    .pressures {
+        gap: 20px;
+    }
+
+    .pressure-main {
+        font-size: 34px;
+    }
+
+    .pressure-secondary {
+        font-size: 23px;
     }
 
     .temperature {
-        font-size: 65px;
+        font-size: 88px;
     }
-
-    .metrics {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .section {
-        padding: 20px 15px;
-    }
-
-    .chart-wrap {
-        height: 230px;
-    }
-
 }
 
 </style>
-
 </head>
 
 
 <body>
 
-<div class="container">
+<div class="wrapper">
+
+    <header class="header">
+
+        <div class="location">
+            IZU / SHIZUOKA
+            <strong>奈良本の空</strong>
+        </div>
+
+        <div class="updated">
+            {{ updated }}
+        </div>
+
+    </header>
 
 
-    <div class="location">
-        IZU · ATAGAWA
-    </div>
+    <!-- 現在 -->
+    <section class="hero">
 
+        <div class="hero-main">
 
-    <!-- ================= CURRENT ================= -->
-
-    <section class="current">
-
-        <div class="current-grid">
-
-
-            <div class="current-main">
-
-                <div class="weather-icon">
-                    {{ icon }}
-                </div>
-
-                <div class="temperature">
-                    {{ "%.1f"|format(temperature) }}
-                    <span>°C</span>
-                </div>
-
-                <div class="weather-name">
-                    {{ weather }}
-                </div>
-
-                <div class="feels">
-                    体感 {{ "%.1f"|format(apparent) }}°C
-                </div>
-
+            <div class="current-label">
+                自宅地点の予報
             </div>
 
+            <div class="temperature">
+                {{ current_temp }}
+                <span>℃</span>
+            </div>
 
-            <div class="metrics">
+            <div class="weather">
+                {{ current_weather }}
+            </div>
+
+            <div class="feels">
+                気温は標高 {{ altitude }}m を考慮
+            </div>
+
+        </div>
 
 
-                <div class="metric">
+        <div class="hero-side">
 
-                    <div class="metric-label">
-                        湿度
-                    </div>
-
-                    <div class="metric-value">
-                        {{ humidity }}%
-                    </div>
-
-                </div>
-
-
-                <div class="metric">
-
-                    <div class="metric-label">
-                        降水量
-                    </div>
-
-                    <div class="metric-value">
-                        {{ "%.1f"|format(precipitation) }} mm
-                    </div>
-
-                </div>
-
+            <div class="metric-list">
 
                 <div class="metric">
-
-                    <div class="metric-label">
-                        風
-                    </div>
-
+                    <div class="metric-label">湿度</div>
                     <div class="metric-value">
-                        {{ "%.1f"|format(wind_speed) }} m/s
+                        {{ humidity }}
+                        <span class="metric-unit">%</span>
                     </div>
-
                 </div>
-
 
                 <div class="metric">
-
-                    <div class="metric-label">
-                        風向
-                    </div>
-
+                    <div class="metric-label">降水量</div>
                     <div class="metric-value">
-                        {{ wind_direction }}
+                        {{ precip }}
+                        <span class="metric-unit">mm</span>
                     </div>
-
                 </div>
 
-
-                <div class="pressure-box">
-
-                    <div class="metric-label">
-                        気圧
+                <div class="metric">
+                    <div class="metric-label">降水確率</div>
+                    <div class="metric-value">
+                        {{ pop }}
+                        <span class="metric-unit">%</span>
                     </div>
-
-                    <div class="pressure-values">
-
-                        <div class="pressure-number">
-                            {{ "%.1f"|format(surface_pressure) }}
-                            <span>hPa</span>
-                        </div>
-
-                        <div class="pressure-number">
-                            {{ "%.1f"|format(pressure_msl) }}
-                            <span>hPa</span>
-                        </div>
-
-                    </div>
-
                 </div>
 
+                <div class="metric">
+                    <div class="metric-label">風</div>
+                    <div class="metric-value">
+                        {{ wind }}
+                        <span class="metric-unit">m/s</span>
+                    </div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">風向</div>
+                    <div class="metric-value">
+                        {{ wind_dir }}
+                    </div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">海面更正気圧</div>
+                    <div class="metric-value">
+                        {{ pressure }}
+                        <span class="metric-unit">hPa</span>
+                    </div>
+                </div>
 
             </div>
 
@@ -880,293 +691,405 @@ body {
     </section>
 
 
-    <!-- ================= 24H ================= -->
+    <!-- 気圧 -->
+    <section class="pressure-section">
 
-    <section class="section">
-
-        <div class="section-title">
-
-            <h2>24時間予報</h2>
-
-            <span>自宅地点</span>
-
+        <div class="pressure-title">
+            気圧
         </div>
 
+        <div class="pressures">
 
-        <div class="forecast">
-
-            {% for item in forecast %}
-
-            <div class="forecast-card">
-
-                <div class="forecast-time">
-                    {{ item.time }}
-                </div>
-
-                <div class="forecast-icon">
-                    {{ item.icon }}
-                </div>
-
-                <div class="forecast-temp">
-                    {{ "%.0f"|format(item.temperature) }}°
-                </div>
-
-                <div class="forecast-rain">
-                    {{ item.rain_probability }}%
-                </div>
-
-                <div class="forecast-mm">
-                    {{ "%.1f"|format(item.precipitation) }} mm
-                </div>
-
+            <div class="pressure-main">
+                {{ surface_pressure }}
+                <span class="metric-unit">hPa</span>
             </div>
 
-            {% endfor %}
+            <div class="pressure-secondary">
+                {{ pressure }}
+                <span class="metric-unit">hPa</span>
+            </div>
 
         </div>
 
     </section>
 
 
-    <!-- ================= CHART ================= -->
-
+    <!-- 24時間 -->
     <section class="section">
 
-        <div class="section-title">
+        <div class="section-head">
 
-            <h2>気温の推移</h2>
+            <div class="section-title">
+                これから24時間
+            </div>
 
-            <span>これから24時間</span>
+            <div class="section-sub">
+                1時間ごとの予報
+            </div>
 
         </div>
 
-        <div class="chart-wrap">
 
+        <div class="timeline-wrap">
+
+            <div class="timeline">
+
+                {% for item in forecast %}
+
+                <div class="hour {% if loop.first %}now{% endif %}">
+
+                    <div class="hour-time">
+                        {{ item.time }}
+                    </div>
+
+                    <div class="hour-temp">
+                        {{ item.temp }}°
+                    </div>
+
+                    <div class="hour-weather">
+                        {{ item.weather }}
+                    </div>
+
+                    <div class="hour-rain">
+                        {% if item.pop is not none %}
+                            雨 {{ item.pop }}%
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+
+                    <div class="hour-rain">
+                        {% if item.precip is not none %}
+                            {{ item.precip }} mm
+                        {% else %}
+                            —
+                        {% endif %}
+                    </div>
+
+                    <div class="hour-wind">
+                        {{ item.wind_dir }} {{ item.wind }}m/s
+                    </div>
+
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- グラフ -->
+    <section class="section">
+
+        <div class="section-head">
+
+            <div class="section-title">
+                気温の推移
+            </div>
+
+            <div class="section-sub">
+                自宅地点
+            </div>
+
+        </div>
+
+        <div class="graph">
             <canvas id="temperatureChart"></canvas>
-
         </div>
 
     </section>
 
 
-    <div class="footer">
-        IZU ATAGAWA · WEATHER
-    </div>
+    <footer class="footer">
 
+        予報地点：静岡県東伊豆町 奈良本付近<br>
+        標高：{{ altitude }}m（設定値）<br>
+        気象予報データ：MET Norway Locationforecast
+
+    </footer>
 
 </div>
 
 
 <script>
 
-const labels =
-    {{ chart_labels | tojson }};
+const forecast = {{ chart_data | safe }};
 
-const temperatures =
-    {{ chart_temperature | tojson }};
+const canvas = document.getElementById("temperatureChart");
+const ctx = canvas.getContext("2d");
 
-const rain =
-    {{ chart_rain | tojson }};
+function drawChart() {
 
+    const ratio = window.devicePixelRatio || 1;
 
-const ctx =
-    document
-        .getElementById("temperatureChart")
-        .getContext("2d");
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
 
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
 
-new Chart(ctx, {
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
-    type: "line",
+    const padding = {
+        left: 10,
+        right: 10,
+        top: 20,
+        bottom: 35
+    };
 
-    data: {
+    const w = width - padding.left - padding.right;
+    const h = height - padding.top - padding.bottom;
 
-        labels: labels,
+    const temps = forecast.map(x => x.temp);
 
-        datasets: [{
+    const minTemp = Math.floor(Math.min(...temps) - 1);
+    const maxTemp = Math.ceil(Math.max(...temps) + 1);
 
-            data: temperatures,
+    const range = maxTemp - minTemp;
 
-            borderColor: "#c990a0",
+    ctx.clearRect(0, 0, width, height);
 
-            backgroundColor:
-                "rgba(201,144,160,.10)",
+    /* 横線 */
 
-            borderWidth: 2,
+    ctx.strokeStyle = "rgba(197,154,166,.12)";
+    ctx.lineWidth = 1;
 
-            pointRadius: 2,
+    for (let i = 0; i <= 4; i++) {
 
-            pointHoverRadius: 5,
+        const y =
+            padding.top +
+            h * (i / 4);
 
-            tension: .38,
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
 
-            fill: true
+        const value =
+            maxTemp -
+            range * (i / 4);
 
-        }]
+        ctx.fillStyle = "#8d8388";
+        ctx.font = "10px sans-serif";
 
-    },
-
-    options: {
-
-        responsive: true,
-
-        maintainAspectRatio: false,
-
-        plugins: {
-
-            legend: {
-                display: false
-            },
-
-            tooltip: {
-
-                callbacks: {
-
-                    label: function(context) {
-
-                        return (
-                            context.parsed.y.toFixed(1)
-                            + " °C"
-                        );
-
-                    }
-
-                }
-
-            }
-
-        },
-
-        scales: {
-
-            x: {
-
-                grid: {
-                    display: false
-                },
-
-                ticks: {
-
-                    color: "#777073",
-
-                    maxTicksLimit: 8,
-
-                    font: {
-                        size: 10
-                    }
-
-                }
-
-            },
-
-            y: {
-
-                grid: {
-
-                    color:
-                        "rgba(255,255,255,.055)"
-
-                },
-
-                ticks: {
-
-                    color: "#777073",
-
-                    font: {
-                        size: 10
-                    },
-
-                    callback: function(value) {
-
-                        return value + "°";
-
-                    }
-
-                }
-
-            }
-
-        }
-
+        ctx.fillText(
+            value.toFixed(0) + "°",
+            padding.left,
+            y - 5
+        );
     }
 
-});
+
+    /* 折れ線 */
+
+    ctx.beginPath();
+
+    forecast.forEach((item, index) => {
+
+        const x =
+            padding.left +
+            (index / (forecast.length - 1)) * w;
+
+        const y =
+            padding.top +
+            (1 - (item.temp - minTemp) / range) * h;
+
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+
+    ctx.strokeStyle = "#c59aa6";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+
+    /* 点 */
+
+    forecast.forEach((item, index) => {
+
+        const x =
+            padding.left +
+            (index / (forecast.length - 1)) * w;
+
+        const y =
+            padding.top +
+            (1 - (item.temp - minTemp) / range) * h;
+
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+
+        ctx.fillStyle = "#211e21";
+        ctx.fill();
+
+        ctx.strokeStyle = "#c59aa6";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+
+        /* 3時間ごとに時刻表示 */
+
+        if (index % 3 === 0) {
+
+            ctx.fillStyle = "#8d8388";
+            ctx.font = "10px sans-serif";
+
+            ctx.textAlign = "center";
+
+            ctx.fillText(
+                item.time,
+                x,
+                height - 10
+            );
+        }
+    });
+
+}
+
+drawChart();
+
+window.addEventListener("resize", drawChart);
 
 </script>
 
-
 </body>
-
 </html>
 """
 
 
-# ============================================================
-# エラー画面
-# ============================================================
-ERROR_HTML = r"""
-<!DOCTYPE html>
+# =========================================================
+# Route
+# =========================================================
+@app.route("/")
+def index():
 
-<html lang="ja">
+    try:
 
-<head>
+        current, future = build_weather()
 
-<meta charset="UTF-8">
+        def fmt(value, digits=1):
+            if value is None:
+                return "—"
 
-<title>Weather Error</title>
+            return f"{value:.{digits}f}"
 
-<style>
+        forecast = []
 
-body {
-    background: #151315;
-    color: #eee;
-    font-family: sans-serif;
-    padding: 40px;
-}
+        for item in future:
 
-.box {
-    max-width: 800px;
-    margin: auto;
-    padding: 30px;
-    background: #241e21;
-    border-radius: 20px;
-}
-
-h2 {
-    color: #d49aaa;
-}
-
-pre {
-    white-space: pre-wrap;
-    color: #c9b9bd;
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="box">
-
-<h2>気象データを取得できませんでした</h2>
-
-<p>
-自宅地点の気象データ取得時にエラーが発生しました。
-</p>
-
-<pre>{{ error }}</pre>
-
-</div>
-
-</body>
-
-</html>
-"""
+            forecast.append({
+                "time": item["time"].strftime("%H:%M"),
+                "temp": fmt(item["temp"], 1),
+                "weather": weather_name(item["symbol"]),
+                "pop": (
+                    round(item["pop"])
+                    if item["pop"] is not None
+                    else None
+                ),
+                "precip": fmt(item["precip"], 1)
+                    if item["precip"] is not None
+                    else None,
+                "wind": fmt(item["wind"], 1),
+                "wind_dir": wind_direction(item["wind_dir"]),
+            })
 
 
+        chart_data = []
+
+        for item in future:
+
+            chart_data.append({
+                "time": item["time"].strftime("%H:%M"),
+                "temp": round(
+                    item["temp"], 1
+                ) if item["temp"] is not None else 0
+            })
+
+
+        return render_template_string(
+            HTML,
+
+            current_temp=fmt(
+                current["temp"], 1
+            ),
+
+            current_weather=weather_name(
+                current["symbol"]
+            ),
+
+            humidity=(
+                round(current["humidity"])
+                if current["humidity"] is not None
+                else "—"
+            ),
+
+            precip=fmt(
+                current["precip"], 1
+            ),
+
+            pop=(
+                round(current["pop"])
+                if current["pop"] is not None
+                else "—"
+            ),
+
+            wind=fmt(
+                current["wind"], 1
+            ),
+
+            wind_dir=wind_direction(
+                current["wind_dir"]
+            ),
+
+            pressure=fmt(
+                current["pressure"], 1
+            ),
+
+            surface_pressure=fmt(
+                current["surface_pressure"], 1
+            ),
+
+            altitude=HOME_ALTITUDE,
+
+            updated=datetime.now(JST).strftime(
+                "%Y.%m.%d  %H:%M"
+            ),
+
+            forecast=forecast,
+
+            chart_data=chart_data,
+        )
+
+
+    except Exception as e:
+
+        return f"""
+        <html>
+        <body style="
+            background:#171517;
+            color:#eee;
+            font-family:sans-serif;
+            padding:40px;
+        ">
+        <h2>気象データを取得できませんでした</h2>
+        <p>{str(e)}</p>
+        </body>
+        </html>
+        """, 500
+
+
+# =========================================================
+# 起動
+# =========================================================
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
-        port=10000
+        port=5000,
+        debug=False
     )
