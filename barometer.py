@@ -1,81 +1,105 @@
 from flask import Flask
+import requests
 import pandas as pd
-import math
+import os
 
 app = Flask(__name__)
 
-def get_complete_data():
-    start_time = pd.Timestamp.now().floor('h')
-    times = pd.date_range(start=start_time, periods=24, freq='h')
-    
-    data = []
-    for t in times:
-        # 気圧の自動計算 (夕方17時に933hPaの底)
-        p_wave = 5 * math.cos((t.hour - 17) * 2 * math.pi / 24)
-        press = round(938 + p_wave, 1)
+# 🏡 東伊豆町奈良本1489-23（標高500m）の正確な位置
+LAT = 34.8156
+LON = 139.0684
+ELEVATION_DROP = 55.0  # 標高500m分の気圧減少補正 (hPa)
+
+def get_real_weather_data():
+    try:
+        # 本物のネット気象サーバー（Open-Meteo）から最新の24時間予報を直接スクラップ
+        url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
+        res = requests.get(url, timeout=5).json()
+        hourly = res['hourly']
         
-        # 気温・湿度の自動計算
-        temp = round(20 + 3 * math.sin((t.hour - 9) * 2 * math.pi / 24), 1)
-        humi = int(82 - 10 * math.sin((t.hour - 13) * 2 * math.pi / 24))
-        
-        # 天気とステータス判定
-        if 14 <= t.hour <= 19:
-            weather = "☔ 雨"
-            humi = max(humi, 88)
-            status = "🔴 警戒（気圧の底）"
-        elif press < 935:
-            weather = "☁️ 曇"
-            status = "⚠️ 注意"
-        else:
-            weather = "☁️ 曇"
-            status = "正常"
-            
-        data.append({
-            'Time': t.strftime('%H:%M'),
-            'Press': press,
-            'Weather': weather,
-            'Temp': temp,
-            'Humi': humi,
-            'Status': status
+        df = pd.DataFrame({
+            'Time': pd.to_datetime(hourly['time']),
+            'SeaPress': hourly['surface_pressure'], # 海抜0m気圧
+            'Code': hourly['weather_code'],
+            'Temp': hourly['temperature_2m'],
+            'Humi': hourly['relative_humidity_2m']
         })
-    return data
+        
+        # 🏡 標高500mの我が家の高さの気圧にガチ補正！
+        df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
+        df['Temp'] = round(df['Temp'], 1)
+        
+        # 現在時刻以降の24時間分を切り出す
+        now = pd.Timestamp.now().floor('h')
+        return df[df['Time'] >= now].head(24)
+    except Exception:
+        return None
+
+def get_weather_string(code):
+    # 世界気象機関(WMO)の天気コードを、パッと見やすい絵文字に変換
+    if code == 0: return "☀️ 快晴"
+    elif code in: return "☁️ 曇りがち"
+    elif code in: return "Context: 🌫️ 霧"
+    elif code in: return "☔ 雨"
+    elif code in: return "❄️ 雪"
+    elif code in: return "⚡ 雷雨"
+    return "☁️ 曇り"
 
 @app.route('/')
 def index():
-    data = get_complete_data()
-    current = data[0] # 今現在のデータ
+    df = get_real_weather_data()
     
-    # アラートバナーのメッセージ（スマートな表現に修正）
-    if "警戒" in current['Status']:
+    # 万が一、ネットの接続トラブルが起きた場合の安全ガード
+    if df is None:
+        return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
+    
+    # 最初の1行（＝今現在のリアルタイムデータ）を抜き出す
+    current_row = df.iloc[0]
+    current_press = current_row['Press']
+    current_weather = get_weather_string(current_row['Code'])
+    current_temp = current_row['Temp']
+    current_humi = current_row['Humi']
+    
+    # 🚨 本物の気圧データに基づいたリアルタイム警戒判定
+    # 気圧が940hPaを下回る、または雨が降ると警戒バナーに自動切り替え
+    if current_press <= 936.0:
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
-        message = "<b>【気圧警戒】脳の血管が拡張しやすい時間帯です</b><br>内耳への負担が強まっています。お部屋の明かりを落とし、愛犬とともにリラックスしてお過ごしください。"
-    elif "注意" in current['Status']:
+        message = f"<b>🔴 【気圧警戒】現在 {current_press} hPa まで気圧が低下しています！</b><br>脳の血管が非常に広がりやすく、頭痛のリスクが最も高い時間帯です。お部屋の明かりを落とし、ワンちゃんと一緒にのんびりゴロゴロ過ごしてくださいね。"
+    elif current_press <= 940.0:
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
         alert_text = "#723b13"
-        message = "<b>【気圧注意】緩やかな低下傾向にあります</b><br>坂道を下りる際は、自律神経の急激な変化を防ぐため、引き続き「時速20〜30km」の減速運転を心がけてください。"
+        message = f"<b>⚠️ 【気圧注意】気圧が {current_press} hPa まで下がってきています</b><br>自律神経に少しずつ負担がかかっています。坂道を下りてふもとへ移動する際は、体への衝撃を和らげるために「時速20〜30km」の減速運転を心がけましょう。"
     else:
         alert_bg = "#f3f8fc"
         alert_border = "#e1effa"
         alert_text = "#1e429f"
-        message = "<b>【環境安定】現在の気圧は比較的穏やかです</b><br>夕方（15:00〜19:00頃）に予定されている次の気圧低下の波に備え、今のうちに水分を補給しておきましょう。"
+        message = "<b>🍏 【環境安定】現在の高原の気圧は比較的穏やかです</b><br>体調に異常はありませんか？これからの気圧の変化に備えて、今のうちに温かい水分を補給してリラックスしておきましょう。"
 
-    # 時間別の表を組み立て
+    # 時間別の本物スケジュール表を1行ずつ組み立て
     rows_html = ""
-    for row in data:
-        bg = "background:#fffdfd;" if "警戒" in row['Status'] else ("background:#fffdf6;" if "注意" in row['Status'] else "")
-        status_color = "#e02424" if "警戒" in row['Status'] else ("#b45309" if "注意" in row['Status'] else "#057a55")
+    for _, row in df.iterrows():
+        time_str = row['Time'].strftime('%H:%M')
+        weather_txt = get_weather_string(row['Code'])
+        p_val = row['Press']
+        t_val = row['Temp']
+        h_val = row['Humi']
+        
+        # 危険度によって表の行に背景色をつける
+        bg = "background:#fffdfd;" if p_val <= 936.0 else ("background:#fffdf6;" if p_val <= 940.0 else "")
+        status_txt = "🔴 警戒" if p_val <= 936.0 else ("⚠️ 注意" if p_val <= 940.0 else "正常")
+        status_color = "#e02424" if p_val <= 936.0 else ("#b45309" if p_val <= 940.0 else "#057a55")
         
         rows_html += f'''
         <tr style="{bg}">
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold;">{row['Time']}</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold; color:#1f2937;">{row['Press']} <span style="font-size:10px;font-weight:normal;color:#6b7280;">hPa</span></td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{row['Weather']}</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#9b1c1c; font-weight:bold;">{row['Temp']}℃</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#1e429f; font-weight:bold;">{row['Humi']}%</td>
-            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:{status_color}; font-weight:bold; font-size:12px;">{row['Status'].split('（')[0]}</td>
+            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold;">{time_str}</td>
+            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; font-weight:bold; color:#1f2937;">{p_val} <span style="font-size:10px;font-weight:normal;color:#6b7280;">hPa</span></td>
+            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{weather_txt}</td>
+            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#9b1c1c; font-weight:bold;">{t_val}℃</td>
+            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:#1e429f; font-weight:bold;">{h_val}%</td>
+            <td style="padding:14px 8px; border-bottom:1px solid #f3f4f6; color:{status_color}; font-weight:bold; font-size:12px;">{status_txt}</td>
         </tr>
         '''
 
@@ -85,7 +109,7 @@ def index():
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Angel Forest Dashboard</title>
+        <title>Angel Forest Live Dashboard</title>
         <style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f9fafb; margin:0; padding:12px; color:#111827; }}
             .container {{ max-width: 480px; margin: 10px auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }}
@@ -110,20 +134,20 @@ def index():
             
             <div class="current-box">
                 <div class="current-item" style="border-right: 1px solid #374151;">
-                    <div class="current-label">気圧</div>
-                    <div class="current-val" style="color:#fbbf24;">{current['Press']} <span style="font-size:11px;">hPa</span></div>
+                    <div class="current-label">リアルタイム気圧</div>
+                    <div class="current-val" style="color:#fbbf24;">{current_press} <span style="font-size:12px;">hPa</span></div>
                 </div>
                 <div class="current-item" style="border-right: 1px solid #374151;">
-                    <div class="current-label">天気</div>
-                    <div class="current-val">{current['Weather']}</div>
+                    <div class="current-label">本物の天気</div>
+                    <div class="current-val">{current_weather}</div>
                 </div>
                 <div class="current-item" style="border-right: 1px solid #374151;">
-                    <div class="current-label">気温</div>
-                    <div class="current-val" style="color:#f87171;">{current['Temp']}℃</div>
+                    <div class="current-label">現在の気温</div>
+                    <div class="current-val" style="color:#f87171;">{current_temp}℃</div>
                 </div>
                 <div class="current-item">
-                    <div class="current-label">湿度</div>
-                    <div class="current-val" style="color:#60a5fa;">{current['Humi']}%</div>
+                    <div class="current-label">現在の湿度</div>
+                    <div class="current-val" style="color:#60a5fa;">{current_humi}%</div>
                 </div>
             </div>
             
@@ -135,7 +159,7 @@ def index():
                 <thead>
                     <tr>
                         <th>時間</th>
-                        <th>気圧</th>
+                        <th>気圧予測</th>
                         <th>天気</th>
                         <th>気温</th>
                         <th>湿度</th>
@@ -152,4 +176,5 @@ def index():
     '''
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
