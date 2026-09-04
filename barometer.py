@@ -327,9 +327,9 @@ def index():
             """
 
 
-        # =====================
+        # =========================
         # HTML
-        # =====================
+        # =========================
 
         html = f"""
 
@@ -373,9 +373,9 @@ body {{
         "Noto Sans JP",
         sans-serif;
 
-    background: #fff8fa;
+    background: #F3F1F0;
 
-    color: #3d2630;
+    color: #303033;
 
     overflow-x: hidden;
 }}
@@ -406,18 +406,18 @@ body {{
 
 .current-box {{
 
-    background: #FF4F9A;
+    background: #A85D72;
 
     border-radius: 20px;
 
     padding: 28px;
 
     box-shadow:
-        0 5px 18px rgba(
-            255,
-            79,
-            154,
-            0.28
+        0 6px 20px rgba(
+            88,
+            55,
+            65,
+            0.18
         );
 
     margin-bottom: 30px;
@@ -441,12 +441,7 @@ body {{
 
 .current-item {{
 
-    background: rgba(
-        255,
-        255,
-        255,
-        0.88
-    );
+    background: #FAFAF9;
 
     border-radius: 14px;
 
@@ -466,12 +461,7 @@ body {{
 
 .current-item.main-pressure {{
 
-    background: rgba(
-        255,
-        255,
-        255,
-        0.96
-    );
+    background: #FFFFFF;
 }}
 
 
@@ -479,7 +469,7 @@ body {{
 
     font-size: 15px;
 
-    color: #9b315f;
+    color: #704252;
 
     margin-bottom: 8px;
 }}
@@ -493,7 +483,7 @@ body {{
 
     line-height: 1.35;
 
-    color: #3d2630;
+    color: #303033;
 }}
 
 
@@ -501,7 +491,7 @@ body {{
 
     font-size: 17px;
 
-    color: #9b315f;
+    color: #81777A;
 
     font-weight: 500;
 }}
@@ -513,7 +503,7 @@ body {{
 
     font-weight: 700;
 
-    color: #3d2630;
+    color: #303033;
 }}
 
 
@@ -534,25 +524,28 @@ body {{
     font-weight: 700;
 }}
 
+
 .alert.normal {{
 
-    background: #ffffff;
+    background: #F5E8EC;
 
-    color: #c2185b;
+    color: #704252;
 }}
+
 
 .alert.warning {{
 
-    background: #fff3cd;
+    background: #F4E9C8;
 
-    color: #8a6500;
+    color: #79651A;
 }}
+
 
 .alert.danger {{
 
-    background: #ffe4e6;
+    background: #F4DEDF;
 
-    color: #b00020;
+    color: #8E3038;
 }}
 
 
@@ -566,7 +559,7 @@ body {{
 
     font-weight: 700;
 
-    color: #c2185b;
+    color: #704252;
 
     margin:
         0
@@ -578,7 +571,7 @@ body {{
 
 .forecast-grid {{
 
-    background: #FFF0F5;
+    background: #E7E3E2;
 
     border-radius: 20px;
 
@@ -602,7 +595,7 @@ body {{
 
 .forecast-card {{
 
-    background: #ffffff;
+    background: #FAFAF9;
 
     border-radius: 14px;
 
@@ -612,16 +605,16 @@ body {{
 
     box-shadow:
         0 2px 8px rgba(
-            194,
-            24,
-            91,
-            0.08
+            48,
+            48,
+            51,
+            0.07
         );
 
     min-width: 0;
 
     border:
-        1px solid #f8dce7;
+        1px solid #DDD8D6;
 }}
 
 
@@ -633,7 +626,7 @@ body {{
 
     text-align: center;
 
-    color: #c2185b;
+    color: #704252;
 
     margin-bottom: 10px;
 }}
@@ -674,7 +667,7 @@ body {{
     padding: 5px 0;
 
     border-top:
-        1px solid #f4e1e8;
+        1px solid #E2DEDC;
 }}
 
 
@@ -682,13 +675,13 @@ body {{
 
     font-size: 14px;
 
-    color: #3d2630;
+    color: #303033;
 }}
 
 
 .small-row {{
 
-    color: #a37b8c;
+    color: #81777A;
 
     font-size: 12px;
 }}
@@ -697,7 +690,7 @@ body {{
 .forecast-pressure {{
 
     border-top:
-        1px solid #f4e1e8;
+        1px solid #E2DEDC;
 
     margin-top: 3px;
 
@@ -707,7 +700,7 @@ body {{
 
     font-size: 12px;
 
-    color: #9b6b7d;
+    color: #81777A;
 }}
 
 
@@ -717,7 +710,7 @@ body {{
 
     font-size: 16px;
 
-    color: #3d2630;
+    color: #303033;
 
     margin-top: 2px;
 }}
@@ -729,7 +722,7 @@ body {{
 
     font-size: 12px;
 
-    color: #a37b8c;
+    color: #81777A;
 
     margin-top: 2px;
 }}
@@ -757,25 +750,25 @@ body {{
 
 .forecast-status.normal {{
 
-    background: #fce7f0;
+    background: #F5E8EC;
 
-    color: #c2185b;
+    color: #704252;
 }}
 
 
 .forecast-status.warning {{
 
-    background: #fff3cd;
+    background: #F4E9C8;
 
-    color: #8a6500;
+    color: #79651A;
 }}
 
 
 .forecast-status.danger {{
 
-    background: #ffe4e6;
+    background: #F4DEDF;
 
-    color: #b00020;
+    color: #8E3038;
 }}
 
 
@@ -817,8 +810,6 @@ body {{
             25px;
     }}
 
-
-    /* 現在状況 */
 
     .current-box {{
 
@@ -1001,7 +992,7 @@ body {{
         text-align: left;
 
         border-top:
-            1px solid #f4e1e8;
+            1px solid #E2DEDC;
 
         margin-top: 3px;
 
