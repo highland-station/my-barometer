@@ -57,7 +57,7 @@ def index():
     if df is None:
         return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
     
-    current_row = df.iloc[0]
+    current_row = df.iloc
     current_press = current_row['Press']
     current_weather = get_weather_string(current_row['Code'])
     current_temp = current_row['Temp']
@@ -72,7 +72,7 @@ def index():
         alert_bg = "#fdfaea"
         alert_border = "#fdf6b2"
         alert_text = "#723b13"
-        message = f"<b>⚠️ 【気圧注意】気圧が {current_press} hPa まで下がってきています</b><br>自律神経に少しずつ負担がかかっています。坂道を下りてふもとへ移動する際は、体への衝撃を和らげるために「時速20〜30km」の減速運転を心がけましょう。"
+        message = f"<b>⚠️ 【気圧注意】気圧が {current_press} hPa まで下がってきています</b><br>自律神経に少しずつ負担がかかってっています。坂道を下りてふもとへ移動する際は、体への衝撃を和らげるために「時速20〜30km」の減速運転を心がけましょう。"
     else:
         alert_bg = "#f3f8fc"
         alert_border = "#e1effa"
@@ -87,7 +87,6 @@ def index():
         t_val = row['Temp']
         h_val = row['Humi']
         
-        # 末尾に else "" を追加してバグを完全に修正しました
         bg = "background:#fffdfd;" if p_val <= 936.0 else ("background:#fffdf6;" if p_val <= 940.0 else "")
         status_txt = "🔴 警戒" if p_val <= 936.0 else ("⚠️ 注意" if p_val <= 940.0 else "正常")
         status_color = "#e02424" if p_val <= 936.0 else ("#b45309" if p_val <= 940.0 else "#057a55")
@@ -175,6 +174,9 @@ def index():
     </html>
     '''
 
+# 🌟 無料サーバーでもパソコンテストでも両方で100%エラーが出ない起動ルールに合体
+port = int(os.environ.get("PORT", 5000))
+wsgi_app = app.wsgi_app
+
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
