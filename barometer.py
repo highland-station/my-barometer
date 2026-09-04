@@ -1,14 +1,13 @@
 from flask import Flask
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 
-# 稲取アメダス
 INATORI_ID = "50506"
+JST = ZoneInfo("Asia/Tokyo")
 
-# キャッシュ時間（10分）
 CACHE_SECONDS = 600
 
 cache = {
@@ -17,106 +16,144 @@ cache = {
 }
 
 
-def extract_value(value):
-    """
-    気象庁アメダスの
-    [数値, 品質情報]
-    形式から数値だけ取り出す
-    """
+def get_value(point, key):
+    value = point.get(key)
+
     if value is None:
         return None
 
     if isinstance(value, list):
         if len(value) == 0:
             return None
-
         value = value[0]
 
-    if isinstance(value, (int, float)):
+    try:
         return float(value)
-
-    return None
+    except:
+        return None
 
 
 def get_jma_observation():
 
-    # RenderはUTCなので日本時間に変換
-    now = datetime.now(ZoneInfo("Asia/Tokyo"))
+    # 最新観測時刻を取得
+    latest_url = (
+        "https://www.jma.go.jp/bosai/amedas/data/"
+        "latest_time.txt"
+    )
 
-    # 最新データから最大2時間前まで探す
-    for back in range(0, 121, 10):
+    response = requests.get(
+        latest_url,
+        timeout=20,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
 
-        target = now - timedelta(minutes=back)
-
-        # 気象庁の観測データは10分刻み
-        minute = (target.minute // 10) * 10
-
-        timestamp = (
-            target.strftime("%Y%m%d")
-            + f"{target.hour:02d}{minute:02d}"
+    if response.status_code != 200:
+        raise Exception(
+            f"気象庁の時刻取得に失敗しました "
+            f"(HTTP {response.status_code})"
         )
 
-        url = (
-            "https://www.jma.go.jp/bosai/amedas/data/map/"
-            + timestamp
-            + ".json"
+    latest_text = response.text.strip()
+
+    print("JMA latest:", latest_text)
+
+    try:
+        latest_dt = datetime.fromisoformat(
+            latest_text
+        )
+    except Exception as e:
+        raise Exception(
+            f"気象庁の時刻データを読み込めませんでした: {e}"
         )
 
-        try:
+    # 最新観測データのURL
+    timestamp = latest_dt.strftime(
+        "%Y%m%d%H%M%S"
+    )
 
-            response = requests.get(
-                url,
-                timeout=10,
-                headers={
-                    "User-Agent": "IzuAtagawaWeather/1.0"
-                }
+    data_url = (
+        "https://www.jma.go.jp/bosai/amedas/data/map/"
+        f"{timestamp}.json"
+    )
+
+    print("JMA URL:", data_url)
+
+    response = requests.get(
+        data_url,
+        timeout=20,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
+
+    if response.status_code != 200:
+        raise Exception(
+            f"気象庁アメダスデータ取得失敗 "
+            f"(HTTP {response.status_code})"
+        )
+
+    try:
+        data = response.json()
+    except Exception as e:
+        raise Exception(
+            f"気象庁データをJSONとして読み込めませんでした: {e}"
+        )
+
+    print(
+        "JMA station count:",
+        len(data)
+    )
+
+    # 稲取
+    if INATORI_ID not in data:
+        raise Exception(
+            "稲取アメダス（50506）が "
+            "気象庁データにありません。"
+        )
+
+    point = data[INATORI_ID]
+
+    print(
+        "INATORI:",
+        point
+    )
+
+    return {
+        "time": latest_dt,
+
+        "temperature":
+            get_value(point, "temp"),
+
+        "humidity":
+            get_value(point, "humidity"),
+
+        "precipitation":
+            get_value(
+                point,
+                "precipitation10m"
+            ),
+
+        "pressure":
+            get_value(
+                point,
+                "pressure"
+            ),
+
+        "normal_pressure":
+            get_value(
+                point,
+                "normalPressure"
             )
-
-            if response.status_code != 200:
-                continue
-
-            data = response.json()
-
-            if INATORI_ID not in data:
-                continue
-
-            point = data[INATORI_ID]
-
-            temperature = extract_value(
-                point.get("temp")
-            )
-
-            humidity = extract_value(
-                point.get("humidity")
-            )
-
-            precipitation = extract_value(
-                point.get("precipitation10m")
-            )
-
-            pressure = extract_value(
-                point.get("pressure")
-            )
-
-            return {
-                "time": timestamp,
-                "temperature": temperature,
-                "humidity": humidity,
-                "precipitation": precipitation,
-                "pressure": pressure
-            }
-
-        except Exception:
-            continue
-
-    return None
+    }
 
 
 def get_weather():
 
-    now = datetime.now().timestamp()
+    now = datetime.now(JST).timestamp()
 
-    # 10分以内ならキャッシュを使用
+    # キャッシュ
     if (
         cache["data"] is not None
         and now - cache["time"] < CACHE_SECONDS
@@ -124,11 +161,6 @@ def get_weather():
         return cache["data"]
 
     observation = get_jma_observation()
-
-    if observation is None:
-        raise Exception(
-            "気象庁アメダスの観測データを取得できませんでした。"
-        )
 
     result = {
         "observation": observation
@@ -143,64 +175,62 @@ def get_weather():
 @app.route("/")
 def index():
 
-    error_message = ""
-
     try:
 
         weather = get_weather()
         obs = weather["observation"]
 
-        temperature = obs.get("temperature")
-        humidity = obs.get("humidity")
-        precipitation = obs.get("precipitation")
-        pressure = obs.get("pressure")
-
-        # -------------------------
-        # 表示用データ
-        # -------------------------
+        temperature = obs["temperature"]
+        humidity = obs["humidity"]
+        precipitation = obs["precipitation"]
+        pressure = obs["pressure"]
+        normal_pressure = obs["normal_pressure"]
 
         if temperature is not None:
-            temperature_text = f"{temperature:.1f} ℃"
+            temperature_text = (
+                f"{temperature:.1f} ℃"
+            )
         else:
             temperature_text = "--.- ℃"
 
         if humidity is not None:
-            humidity_text = f"{humidity:.0f} %"
+            humidity_text = (
+                f"{humidity:.0f} %"
+            )
         else:
             humidity_text = "-- %"
 
         if precipitation is not None:
-            precipitation_text = f"{precipitation:.1f} mm"
+            precipitation_text = (
+                f"{precipitation:.1f} mm"
+            )
         else:
-            precipitation_text = "--.- mm"
+            precipitation_text = "0.0 mm"
 
         if pressure is not None:
-            pressure_text = f"{pressure:.1f} hPa"
+            pressure_text = (
+                f"{pressure:.1f} hPa"
+            )
         else:
             pressure_text = "--.- hPa"
 
-        # -------------------------
-        # 観測時刻
-        # -------------------------
-
-        try:
-
-            dt = datetime.strptime(
-                obs["time"],
-                "%Y%m%d%H%M"
+        if normal_pressure is not None:
+            normal_pressure_text = (
+                f"{normal_pressure:.1f} hPa"
             )
+        else:
+            normal_pressure_text = "--.- hPa"
 
-            dt = dt.replace(
-                tzinfo=ZoneInfo("Asia/Tokyo")
-            )
+        observation_time = (
+            obs["time"]
+            .astimezone(JST)
+        )
 
-            time_text = dt.strftime(
-                "%Y/%m/%d %H:%M"
-            )
+        time_text = observation_time.strftime(
+            "%Y/%m/%d %H:%M"
+        )
 
-        except Exception:
-
-            time_text = "--"
+        error_message = ""
 
     except Exception as e:
 
@@ -208,15 +238,15 @@ def index():
         humidity_text = "-- %"
         precipitation_text = "--.- mm"
         pressure_text = "--.- hPa"
+        normal_pressure_text = "--.- hPa"
         time_text = "--"
 
-        error_message = str(e)
+        error_message = (
+            f"{type(e).__name__}: {e}"
+        )
 
 
-    # -------------------------
     # HTML
-    # -------------------------
-
     html = f"""
 <!DOCTYPE html>
 
@@ -227,7 +257,7 @@ def index():
 <meta charset="UTF-8">
 
 <meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
+content="width=device-width, initial-scale=1.0">
 
 <title>伊豆熱川 気象観測</title>
 
@@ -241,70 +271,49 @@ body {{
     margin: 0;
     background: #F3F1F0;
     color: #40393B;
-
     font-family:
         -apple-system,
         BlinkMacSystemFont,
         "Segoe UI",
         "Yu Gothic",
-        "Hiragino Kaku Gothic ProN",
         sans-serif;
 }}
 
 .container {{
     width: 100%;
     max-width: 1100px;
-
-    margin: 0 auto;
-
+    margin: auto;
     padding: 24px;
 }}
 
 .location {{
     color: #704252;
-
     font-size: 14px;
-
-    letter-spacing: 0.08em;
-
-    margin-bottom: 8px;
+    letter-spacing: .08em;
+    margin-bottom: 10px;
 }}
 
 .current {{
     background: #A85D72;
-
     color: white;
-
     border-radius: 20px;
-
     padding: 28px;
-
-    margin-bottom: 20px;
 }}
 
 .current-top {{
     display: flex;
-
     justify-content: space-between;
-
     align-items: center;
-
-    gap: 20px;
 }}
 
 .current-label {{
     font-size: 14px;
-
-    opacity: 0.85;
+    opacity: .85;
 }}
 
 .temperature {{
     font-size: 64px;
-
     font-weight: 300;
-
-    line-height: 1.1;
-
     margin-top: 8px;
 }}
 
@@ -314,152 +323,111 @@ body {{
 
 .cards {{
     display: grid;
-
     grid-template-columns:
         repeat(4, minmax(0, 1fr));
-
     gap: 12px;
-
-    margin-top: 24px;
+    margin-top: 20px;
 }}
 
 .card {{
     background: #FAFAF9;
-
     border-radius: 16px;
-
     padding: 20px;
-
-    min-width: 0;
 }}
 
 .card-label {{
     color: #81777A;
-
     font-size: 13px;
-
     margin-bottom: 8px;
 }}
 
 .card-value {{
-    font-size: 24px;
-
     color: #704252;
-
-    font-weight: 500;
+    font-size: 24px;
 }}
 
 .pressure {{
     background: #FAFAF9;
-
     border-radius: 18px;
-
     padding: 24px;
-
     margin-top: 20px;
 }}
 
 .pressure-title {{
-    font-size: 14px;
-
     color: #81777A;
-
-    margin-bottom: 12px;
+    font-size: 14px;
+    margin-bottom: 10px;
 }}
 
 .pressure-value {{
-    font-size: 30px;
-
     color: #704252;
+    font-size: 30px;
+    line-height: 1.6;
 }}
 
 .forecast {{
     background: #E7E3E2;
-
     border-radius: 18px;
-
     padding: 24px;
-
     margin-top: 20px;
 }}
 
 .section-title {{
-    font-size: 18px;
-
     color: #704252;
-
+    font-size: 18px;
     margin-bottom: 18px;
 }}
 
 .forecast-grid {{
     display: grid;
-
     grid-template-columns:
         repeat(8, minmax(80px, 1fr));
-
     gap: 8px;
-
     overflow-x: auto;
 }}
 
 .hour {{
     background: #FAFAF9;
-
     border-radius: 12px;
-
     padding: 12px 8px;
-
     text-align: center;
 }}
 
 .hour-time {{
-    font-size: 12px;
-
     color: #81777A;
+    font-size: 12px;
 }}
 
 .hour-icon {{
     font-size: 25px;
-
     margin: 8px 0;
 }}
 
 .hour-temp {{
-    font-size: 16px;
-
     color: #704252;
+    font-size: 16px;
 }}
 
 .update {{
     text-align: right;
-
     color: #81777A;
-
     font-size: 12px;
-
     margin-top: 16px;
 }}
 
 .error {{
     background: #F4DEDF;
-
     color: #704252;
-
     border-radius: 14px;
-
     padding: 16px;
-
     margin-top: 20px;
+    word-break: break-word;
 }}
 
 @media (max-width: 700px) {{
 
     .container {{
         padding: 14px;
-    }}
-
-    .current {{
-        padding: 22px;
     }}
 
     .temperature {{
@@ -478,8 +446,6 @@ body {{
     .forecast-grid {{
         grid-template-columns:
             repeat(8, 80px);
-
-        overflow-x: auto;
     }}
 
 }}
@@ -488,183 +454,190 @@ body {{
 
 </head>
 
-
 <body>
 
 <div class="container">
 
-    <div class="location">
-        伊豆熱川
-    </div>
+<div class="location">
+伊豆熱川
+</div>
+
+<section class="current">
+
+<div class="current-top">
+
+<div>
+
+<div class="current-label">
+現在の観測
+</div>
+
+<div class="temperature">
+{temperature_text}
+</div>
+
+</div>
+
+<div class="weather-icon">
+🌤️
+</div>
+
+</div>
+
+</section>
 
 
-    <section class="current">
+<div class="cards">
 
-        <div class="current-top">
+<div class="card">
 
-            <div>
+<div class="card-label">
+湿度
+</div>
 
-                <div class="current-label">
-                    現在の観測
-                </div>
+<div class="card-value">
+{humidity_text}
+</div>
 
-                <div class="temperature">
-                    {temperature_text}
-                </div>
-
-            </div>
-
-            <div class="weather-icon">
-                🌤️
-            </div>
-
-        </div>
-
-    </section>
+</div>
 
 
-    <div class="cards">
+<div class="card">
 
-        <div class="card">
+<div class="card-label">
+降水量
+</div>
 
-            <div class="card-label">
-                湿度
-            </div>
+<div class="card-value">
+{precipitation_text}
+</div>
 
-            <div class="card-value">
-                {humidity_text}
-            </div>
-
-        </div>
+</div>
 
 
-        <div class="card">
+<div class="card">
 
-            <div class="card-label">
-                降水量
-            </div>
+<div class="card-label">
+観測地点
+</div>
 
-            <div class="card-value">
-                {precipitation_text}
-            </div>
+<div class="card-value">
+稲取
+</div>
 
-        </div>
-
-
-        <div class="card">
-
-            <div class="card-label">
-                観測地点
-            </div>
-
-            <div class="card-value">
-                稲取
-            </div>
-
-        </div>
+</div>
 
 
-        <div class="card">
+<div class="card">
 
-            <div class="card-label">
-                観測時刻
-            </div>
+<div class="card-label">
+観測時刻
+</div>
 
-            <div class="card-value"
-                 style="font-size:18px;">
-                {time_text}
-            </div>
+<div class="card-value"
+style="font-size:18px;">
+{time_text}
+</div>
 
-        </div>
+</div>
 
-    </div>
-
-
-    <section class="pressure">
-
-        <div class="pressure-title">
-            気圧
-        </div>
-
-        <div class="pressure-value">
-            {pressure_text}
-        </div>
-
-    </section>
+</div>
 
 
-    <section class="forecast">
+<section class="pressure">
 
-        <div class="section-title">
-            24時間
-        </div>
+<div class="pressure-title">
+気圧
+</div>
 
-        <div class="forecast-grid">
+<div class="pressure-value">
+{pressure_text}<br>
+{normal_pressure_text}
+</div>
+
+</section>
+
+
+<section class="forecast">
+
+<div class="section-title">
+24時間
+</div>
+
+<div class="forecast-grid">
 """
 
 
-    # -------------------------
     # 24時間表示
-    # -------------------------
+    # 現段階では現在観測値を仮表示
 
-    now_japan = datetime.now(
-        ZoneInfo("Asia/Tokyo")
-    )
+    now_japan = datetime.now(JST)
 
     for i in range(24):
 
-        hour = now_japan + timedelta(hours=i)
+        hour = now_japan.replace(
+            minute=0,
+            second=0,
+            microsecond=0
+        )
 
-        hour_text = hour.strftime("%H:%M")
+        from datetime import timedelta
+
+        hour = hour + timedelta(
+            hours=i
+        )
+
+        hour_text = hour.strftime(
+            "%H:%M"
+        )
 
         html += f"""
-            <div class="hour">
+<div class="hour">
 
-                <div class="hour-time">
-                    {hour_text}
-                </div>
+<div class="hour-time">
+{hour_text}
+</div>
 
-                <div class="hour-icon">
-                    🌤️
-                </div>
+<div class="hour-icon">
+🌤️
+</div>
 
-                <div class="hour-temp">
-                    {temperature_text}
-                </div>
+<div class="hour-temp">
+{temperature_text}
+</div>
 
-            </div>
+</div>
 """
 
 
-    html += """
-        </div>
+    html += f"""
+</div>
 
-    </section>
+</section>
 """
 
 
     if error_message:
 
         html += f"""
-    <div class="error">
+<div class="error">
 
-        データ取得エラー<br>
+データ取得エラー<br>
 
-        {error_message}
+{error_message}
 
-    </div>
+</div>
 """
 
 
     html += f"""
+<div class="update">
 
-    <div class="update">
+気象庁アメダス 稲取<br>
 
-        気象庁アメダス 稲取<br>
+観測時刻：{time_text}
 
-        観測時刻：{time_text}
-
-    </div>
+</div>
 
 </div>
 
@@ -672,7 +645,6 @@ body {{
 
 </html>
 """
-
 
     return html
 
