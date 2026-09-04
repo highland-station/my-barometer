@@ -11,14 +11,12 @@ COAST_LAT = 34.8156
 COAST_LON = 139.0684
 
 # 現地：奈良本1489-23付近
-# 近傍住所の座標を使用
 HIGHLAND_LAT = 34.8346
 HIGHLAND_LON = 139.0481
 HIGHLAND_ELEVATION = 500
 
 
 def get_weather_data(latitude, longitude, elevation=None):
-    """指定地点の現在以降24時間分の気象予報を取得する。"""
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": latitude,
@@ -35,7 +33,6 @@ def get_weather_data(latitude, longitude, elevation=None):
         "forecast_days": 2,
     }
 
-    # 現地のみ、標高500mとして計算してもらう
     if elevation is not None:
         params["elevation"] = elevation
 
@@ -76,7 +73,6 @@ def get_weather_data(latitude, longitude, elevation=None):
 
 
 def create_fallback_data(is_highland):
-    """通信失敗時に画面を維持するための仮データ。"""
     now = pd.Timestamp.now(tz="Asia/Tokyo").tz_localize(None).floor("h")
 
     if is_highland:
@@ -131,7 +127,6 @@ def get_weather_string(code):
 
 @app.route("/")
 def index():
-    # 現地（標高500m）と麓を別々に取得
     highland_df = get_weather_data(
         HIGHLAND_LAT,
         HIGHLAND_LON,
@@ -150,7 +145,6 @@ def index():
 
     data_error = highland_fallback or coast_fallback
 
-    # 現地の時間別データに、麓の気温を結合
     coast_temp = coast_df[["Time", "Temp"]].rename(
         columns={"Temp": "CoastTemp"}
     )
@@ -167,7 +161,6 @@ def index():
     current_humi = current["Humi"]
     current_rain = current["Rain"]
 
-    # 気圧アラートは、天気予報と同じ海面更正気圧を基準にする
     if data_error:
         alert_bg = "#fffaf0"
         alert_border = "#ffe4b5"
@@ -181,8 +174,7 @@ def index():
         alert_border = "#fde8e8"
         alert_text = "#9b1c1c"
         message = (
-            f"<b>🔴 気圧警戒：天気予報の気圧は "
-            f"{current_forecast_press:.1f} hPa です。</b>"
+            f"<b>🔴 気圧警戒：{current_forecast_press:.1f} hPa</b>"
             "<br>気圧変化に敏感な方は、無理をせずゆっくり過ごしましょう。"
         )
     elif current_forecast_press <= 1010.0:
@@ -190,8 +182,7 @@ def index():
         alert_border = "#fdf6b2"
         alert_text = "#78350f"
         message = (
-            f"<b>⚠️ 気圧注意：天気予報の気圧は "
-            f"{current_forecast_press:.1f} hPa です。</b>"
+            f"<b>⚠️ 気圧注意：{current_forecast_press:.1f} hPa</b>"
             "<br>体調の変化に気をつけて過ごしましょう。"
         )
     else:
@@ -230,7 +221,7 @@ def index():
             <td>{row["Time"].strftime("%H:%M")}</td>
             <td>
                 <b class="local-value">{row["SurfacePress"]:.1f} hPa</b>
-                <small>天気予報: {row["PressMSL"]:.1f} hPa</small>
+                <small>{row["PressMSL"]:.1f} hPa</small>
             </td>
             <td>{get_weather_string(row["Code"])}</td>
             <td>
@@ -249,7 +240,7 @@ def index():
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>奈良本 気象ダッシュボード</title>
+        <title>奈良本の天気</title>
         <style>
             * {{
                 box-sizing: border-box;
@@ -273,28 +264,10 @@ def index():
                 box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
             }}
 
-            .header {{
-                text-align: center;
-                padding-bottom: 14px;
-                border-bottom: 1px solid #e5e7eb;
-            }}
-
-            .header h1 {{
-                margin: 0;
-                font-size: 19px;
-            }}
-
-            .header p {{
-                color: #6b7280;
-                font-size: 12px;
-                margin: 6px 0 0;
-            }}
-
             .current-box {{
                 background: #1f2937;
                 color: #ffffff;
                 border-radius: 14px;
-                margin: 18px 0;
                 padding: 18px 14px;
             }}
 
@@ -317,17 +290,15 @@ def index():
                 margin-top: 4px;
             }}
 
-            .forecast-pressure {{
-                color: #9ca3af;
-                font-size: 11px;
-                margin-top: 7px;
-            }}
-
             .metrics {{
-                display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
+                display: flex;
+                flex-wrap: wrap;
                 gap: 14px 8px;
                 text-align: center;
+            }}
+
+            .metrics > div {{
+                flex: 1 1 100px;
             }}
 
             .metric-label {{
@@ -339,6 +310,13 @@ def index():
                 font-size: 14px;
                 font-weight: 700;
                 margin-top: 4px;
+            }}
+
+            .location-note {{
+                color: #6b7280;
+                font-size: 12px;
+                text-align: center;
+                margin: 12px 0 16px;
             }}
 
             .alert-banner {{
@@ -394,18 +372,10 @@ def index():
     </head>
     <body>
         <div class="container">
-            <div class="header">
-                <h1>奈良本の気象ダッシュボード</h1>
-                <p>現地：標高500m ／ 麓：海岸・国道135号周辺</p>
-            </div>
-
             <div class="current-box">
                 <div class="current-main">
-                    <div class="label">現在の気圧</div>
+                    <div class="label">気圧</div>
                     <div class="current-pressure">{current_press:.1f} hPa</div>
-                    <div class="forecast-pressure">
-                        天気予報の気圧　{current_forecast_press:.1f} hPa
-                    </div>
                 </div>
 
                 <div class="metrics">
@@ -440,6 +410,10 @@ def index():
                 </div>
             </div>
 
+            <div class="location-note">
+                現地：標高500m ／ 麓：海岸・国道135号周辺
+            </div>
+
             <div class="alert-banner">{message}</div>
 
             <div class="table-wrap">
@@ -447,7 +421,7 @@ def index():
                     <thead>
                         <tr>
                             <th>時間</th>
-                            <th>現地の気圧</th>
+                            <th>気圧</th>
                             <th>天気</th>
                             <th>気温</th>
                             <th>湿度</th>
