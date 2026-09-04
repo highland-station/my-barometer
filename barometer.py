@@ -1,6 +1,7 @@
 from flask import Flask
 import pandas as pd
 import requests
+import os
 
 app = Flask(__name__)
 
@@ -9,6 +10,7 @@ COAST_LON = 139.0684
 
 HIGHLAND_LAT = 34.8346
 HIGHLAND_LON = 139.0481
+
 
 WEATHER_CODES = {
     0: "☀️ 快晴",
@@ -171,6 +173,19 @@ def index():
             current_msl
         )
 
+        coast_current_temp = float(
+            coast.iloc[0]["Temp"]
+        )
+
+        temp_difference = (
+            current_temp - coast_current_temp
+        )
+
+
+        # ---------------------------------
+        # 24時間カード
+        # ---------------------------------
+
         forecast_cards = ""
 
         for i in range(
@@ -220,17 +235,19 @@ def index():
                 msl_press
             )
 
-            forecast_cards += f"""
+            forecast_cards += """
             <article class="forecast-card">
 
                 <div class="forecast-top">
+
                     <span class="forecast-time">
-                        {time_text}
+                        {time}
                     </span>
 
                     <span class="forecast-status {status_cls}">
                         {status}
                     </span>
+
                 </div>
 
                 <div class="forecast-weather">
@@ -265,21 +282,36 @@ def index():
                     <span>気圧</span>
 
                     <strong>
-                        {surface_press:.1f}
+                        {surface:.1f}
                         <small>hPa</small>
                     </strong>
 
                     <em>
-                        {msl_press:.1f}
-                        hPa
+                        {msl:.1f} hPa
                     </em>
 
                 </div>
 
             </article>
-            """
+            """.format(
+                time=time_text,
+                status_cls=status_cls,
+                status=status,
+                weather=weather,
+                temp=temp,
+                coast_temp=coast_temp,
+                humidity=humidity,
+                precip=precip,
+                surface=surface_press,
+                msl=msl_press
+            )
 
-        html = f"""
+
+        # ---------------------------------
+        # HTML
+        # ---------------------------------
+
+        html = """
 <!DOCTYPE html>
 
 <html lang="ja">
@@ -293,15 +325,19 @@ def index():
 
 <title>伊豆熱川 Weather</title>
 
+
 <style>
+
 
 * {
     box-sizing: border-box;
 }
 
+
 html {
     overflow-x: hidden;
 }
+
 
 body {
 
@@ -326,6 +362,7 @@ body {
    MAIN
 ========================= */
 
+
 .container {
 
     width: min(
@@ -342,6 +379,7 @@ body {
 /* =========================
    CURRENT
 ========================= */
+
 
 .current {
 
@@ -437,7 +475,10 @@ body {
 }
 
 
-/* CURRENT DATA */
+/* =========================
+   CURRENT DATA
+========================= */
+
 
 .current-data {
 
@@ -489,7 +530,7 @@ body {
 
     font-size: 15px;
 
-    margin-top: 7px;
+    margin-top: 8px;
 }
 
 
@@ -523,7 +564,7 @@ body {
 
     margin-top: 18px;
 
-    padding: 8px 12px;
+    padding: 8px 13px;
 
     border-radius: 999px;
 
@@ -561,6 +602,7 @@ body {
    24 HOURS
 ========================= */
 
+
 .forecast-section {
 
     background: #E7E3E2;
@@ -568,7 +610,6 @@ body {
     border-radius: 26px;
 
     padding: 30px;
-
 }
 
 
@@ -606,7 +647,10 @@ body {
 }
 
 
-/* GRID */
+/* =========================
+   GRID
+========================= */
+
 
 .forecast-grid {
 
@@ -619,7 +663,10 @@ body {
 }
 
 
-/* CARD */
+/* =========================
+   CARD
+========================= */
+
 
 .forecast-card {
 
@@ -636,7 +683,6 @@ body {
     transition:
         transform .2s ease,
         box-shadow .2s ease;
-
 }
 
 
@@ -660,7 +706,7 @@ body {
 
     gap: 8px;
 
-    margin-bottom: 16px;
+    margin-bottom: 15px;
 }
 
 
@@ -716,7 +762,7 @@ body {
 
     min-height: 23px;
 
-    margin-bottom: 5px;
+    margin-bottom: 4px;
 }
 
 
@@ -754,7 +800,6 @@ body {
     border-bottom: 1px solid #E2DEDC;
 
     padding: 12px 0;
-
 }
 
 
@@ -836,6 +881,7 @@ body {
    TABLET
 ========================= */
 
+
 @media (max-width: 1100px) {
 
     .current {
@@ -844,22 +890,26 @@ body {
             repeat(2, 1fr);
     }
 
+
     .current-main {
 
         grid-row: span 2;
     }
+
 
     .forecast-grid {
 
         grid-template-columns:
             repeat(4, minmax(0, 1fr));
     }
+
 }
 
 
 /* =========================
    MOBILE
 ========================= */
+
 
 @media (max-width: 700px) {
 
@@ -943,12 +993,6 @@ body {
     }
 
 
-    .forecast-weather {
-
-        margin-bottom: 3px;
-    }
-
-
     .temperature {
 
         font-size: 30px;
@@ -975,6 +1019,7 @@ body {
    SMALL MOBILE
 ========================= */
 
+
 @media (max-width: 380px) {
 
     .container {
@@ -982,15 +1027,18 @@ body {
         width: calc(100% - 16px);
     }
 
+
     .current-main {
 
         padding: 24px 20px;
     }
 
+
     .current-data {
 
         padding: 20px;
     }
+
 
     .forecast-section {
 
@@ -999,6 +1047,7 @@ body {
 
 }
 
+
 </style>
 
 </head>
@@ -1006,10 +1055,12 @@ body {
 
 <body>
 
+
 <main class="container">
 
 
-    <!-- CURRENT -->
+    <!-- 現在 -->
+
 
     <section class="current">
 
@@ -1090,17 +1141,14 @@ body {
             </div>
 
             <div class="data-value">
-                {(
-                    current_temp
-                    - float(coast.iloc[0]["Temp"])
-                ):+.1f}
+                {temp_difference:+.1f}
                 <small>℃</small>
             </div>
 
             <div class="data-divider"></div>
 
             <div class="data-label">
-                今日の空
+                空模様
             </div>
 
             <div class="data-value">
@@ -1113,7 +1161,8 @@ body {
     </section>
 
 
-    <!-- 24 HOURS -->
+    <!-- 24時間 -->
+
 
     <section class="forecast-section">
 
@@ -1143,12 +1192,28 @@ body {
 
 </main>
 
+
 </body>
 
 </html>
 """
 
+        # HTML側のデータを安全に差し込む
+        html = html.format(
+            current_weather=current_weather,
+            current_temp=current_temp,
+            current_surface=current_surface,
+            current_msl=current_msl,
+            current_humidity=current_humidity,
+            current_precip=current_precip,
+            temp_difference=temp_difference,
+            status_class=status_class,
+            status_text=status_text,
+            forecast_cards=forecast_cards
+        )
+
         return html
+
 
     except Exception as e:
 
@@ -1159,8 +1224,6 @@ body {
 
 
 if __name__ == "__main__":
-
-    import os
 
     port = int(
         os.environ.get(
