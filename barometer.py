@@ -5,13 +5,6 @@ import os
 
 app = Flask(__name__)
 
-from flask import Flask
-import requests
-import pandas as pd
-import os
-
-app = Flask(__name__)
-
 # 🏡 東伊豆町奈良本1489-23（標高500m）の正確な位置
 LAT = 34.8156
 LON = 139.0684
@@ -19,42 +12,42 @@ ELEVATION_DROP = 55.0  # 標高500m分の気圧減少補正 (hPa)
 
 def get_real_weather_data():
     try:
-        # 本物のネット気象サーバー（Open-Meteo）から最新の24時間予報を直接取得
+        # 本物のネット気象サーバー（Open-Meteo）から最新の24時間予報を取得
         url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=surface_pressure,weather_code,temperature_2m,relative_humidity_2m&timezone=Asia%2FTokyo"
         res = requests.get(url, timeout=5).json()
         hourly = res['hourly']
         
         df = pd.DataFrame({
             'Time': pd.to_datetime(hourly['time']),
-            'SeaPress': hourly['surface_pressure'], # 海抜0m気圧
+            'SeaPress': hourly['surface_pressure'],
             'Code': hourly['weather_code'],
             'Temp': hourly['temperature_2m'],
             'Humi': hourly['relative_humidity_2m']
         })
         
-        # 🏡 標高500mの我が家の高さの気圧に補正！
+        # 🏡 標高500mの我が家の高さの気圧に補正
         df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
         df['Temp'] = round(df['Temp'], 1)
         
-        # 現在時刻以降の24時間分を切り出す
         now = pd.Timestamp.now().floor('h')
         return df[df['Time'] >= now].head(24)
     except Exception:
         return None
 
 def get_weather_string(code):
-    # 世界気象機関(WMO)の天気コードを、バグを完全に修正して変換
-    if code == 0: 
+    # AIによる文字消えバグを回避するため、完全に安全な判定方法に書き換えました
+    c = int(code)
+    if c == 0:
         return "☀️ 快晴"
-    elif code in: 
+    elif c == 1 or c == 2 or c == 3:
         return "☁️ 曇りがち"
-    elif code in: 
-        return "媒介 🌫️ 霧"
-    elif code in: 
+    elif c == 45 or c == 48:
+        return "🌫️ 霧"
+    elif (51 <= c <= 67) or (80 <= c <= 82):
         return "☔ 雨"
-    elif code in: 
+    elif (71 <= c <= 77) or (85 <= c <= 86):
         return "❄️ 雪"
-    elif code in: 
+    elif c == 95 or c == 96 or c == 99:
         return "⚡ 雷雨"
     return "☁️ 曇り"
 
@@ -65,14 +58,12 @@ def index():
     if df is None:
         return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
     
-    # 最初の1行（＝今現在のリアルタイムデータ）を抜き出す
     current_row = df.iloc[0]
     current_press = current_row['Press']
     current_weather = get_weather_string(current_row['Code'])
     current_temp = current_row['Temp']
     current_humi = current_row['Humi']
     
-    # 気圧が936hPaを下回る、または雨が降ると警戒バナーに自動切り替え
     if current_press <= 936.0:
         alert_bg = "#fdf2f2"
         alert_border = "#fde8e8"
@@ -89,7 +80,6 @@ def index():
         alert_text = "#1e429f"
         message = "<b>🍏 【環境安定】現在の高原の気圧は比較的穏やかです</b><br>体調に異常はありませんか？これからの気圧の変化に備えて、今のうちに温かい水分を補給してリラックスしておきましょう。"
 
-    # 時間別の本物スケジュール表を1行ずつ組み立て
     rows_html = ""
     for _, row in df.iterrows():
         time_str = row['Time'].strftime('%H:%M')
