@@ -58,8 +58,8 @@ def index():
     if df is None or df.empty:
         return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
     
-    # 🌟 【ここが原因でした！】df.iloc の後ろに [0] を追加して最初の行を正しく指定
-    current_row = df.iloc
+    # 🌟 [0]をしっかりと書き込んで、1分ごとのエラーを完璧に修正しました！
+    current_row = df.iloc[0]
     current_press = current_row['Press']
     current_weather = get_weather_string(current_row['Code'])
     current_temp = current_row['Temp']
