@@ -1,68 +1,101 @@
 from flask import Flask, render_template_string
 import requests
-import json
 import math
 from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
 # =========================================================
-# 自宅付近
+# 奈良本・自宅
 # =========================================================
 HOME_LAT = 34.8346
 HOME_LON = 139.0481
 HOME_ALTITUDE = 500
 
-API_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
+MET_URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete"
 
 HEADERS = {
-    "User-Agent": "IzuHomeWeather/1.0 https://github.com/highland-station/my-barometer"
+    "User-Agent": "my-barometer/1.0 github.com/highland-station/my-barometer"
 }
 
 JST = timezone(timedelta(hours=9))
 
 
 # =========================================================
-# 天気
+# 天気アイコン
 # =========================================================
-WEATHER = {
-    "clearsky": "快晴",
-    "fair": "晴れ",
-    "partlycloudy": "晴れ時々くもり",
-    "cloudy": "くもり",
-    "lightrain": "小雨",
-    "rain": "雨",
-    "heavyrain": "強い雨",
-    "lightsleet": "みぞれ",
-    "sleet": "みぞれ",
-    "heavysleet": "強いみぞれ",
-    "lightsnow": "小雪",
-    "snow": "雪",
-    "heavysnow": "大雪",
-    "rainshowers": "にわか雨",
-    "heavyrainshowers": "強いにわか雨",
-    "snowshowers": "にわか雪",
-    "heavysnowshowers": "強いにわか雪",
-    "fog": "霧",
-    "rainshowersandthunder": "雷雨",
-    "heavyrainshowersandthunder": "激しい雷雨",
-    "rainandthunder": "雷雨",
-    "heavyrainandthunder": "激しい雷雨",
-    "snowandthunder": "雷雪",
-    "sleetandthunder": "雷雨",
-}
+def weather_icon(symbol):
+    if not symbol:
+        return "🌤️"
+
+    s = symbol.lower()
+
+    if "thunder" in s:
+        return "⛈️"
+    if "sleet" in s:
+        return "🌨️"
+    if "snow" in s:
+        return "❄️"
+    if "fog" in s:
+        return "🌫️"
+    if "heavyrain" in s:
+        return "🌧️"
+    if "rain" in s:
+        return "🌧️"
+    if "heavysleet" in s:
+        return "🌨️"
+    if "sleet" in s:
+        return "🌨️"
+    if "partlycloudy" in s:
+        return "🌤️"
+    if "cloudy" in s:
+        return "☁️"
+    if "fair" in s:
+        return "🌤️"
+    if "clearsky" in s:
+        return "☀️"
+
+    return "🌤️"
 
 
+# =========================================================
+# 天気名
+# =========================================================
 def weather_name(symbol):
     if not symbol:
-        return "—"
+        return "天気不明"
 
-    base = symbol.split("_")[0]
-    return WEATHER.get(base, "—")
+    s = symbol.lower()
+
+    if "thunder" in s:
+        return "雷雨"
+    if "heavyrain" in s:
+        return "強い雨"
+    if "rain" in s:
+        return "雨"
+    if "fog" in s:
+        return "霧"
+    if "snow" in s:
+        return "雪"
+    if "sleet" in s:
+        return "みぞれ"
+    if "partlycloudy" in s:
+        return "晴れ時々曇り"
+    if "cloudy" in s:
+        return "曇り"
+    if "fair" in s:
+        return "晴れ"
+    if "clearsky" in s:
+        return "快晴"
+
+    return "天気不明"
 
 
-def wind_direction(degrees):
-    if degrees is None:
+# =========================================================
+# 風向
+# =========================================================
+def wind_direction(deg):
+    if deg is None:
         return "—"
 
     directions = [
@@ -72,29 +105,17 @@ def wind_direction(degrees):
         "西", "西北西", "北西", "北北西"
     ]
 
-    index = int((degrees + 11.25) / 22.5) % 16
+    index = int((deg + 11.25) / 22.5) % 16
     return directions[index]
 
 
-def value(data, key):
-    if not data:
-        return None
-
-    return data.get(key)
-
-
 # =========================================================
-# 海面更正気圧 → 標高500mの現地気圧を推定
+# 自宅標高から地上気圧を計算
 # =========================================================
 def calculate_surface_pressure(sea_level_pressure, temperature):
-    if sea_level_pressure is None:
+    if sea_level_pressure is None or temperature is None:
         return None
 
-    # 気温がない場合は標準的な15℃を使用
-    if temperature is None:
-        temperature = 15.0
-
-    # 標高による気圧低下を気温を考慮して推定
     kelvin = temperature + 273.15
 
     pressure = sea_level_pressure * math.exp(
@@ -106,18 +127,138 @@ def calculate_surface_pressure(sea_level_pressure, temperature):
 
 
 # =========================================================
-# API取得
+# 気圧の状態
+# =========================================================
+def pressure_status(current_pressure, previous_pressure):
+    if current_pressure is None:
+        return "気圧データなし", "—"
+
+    if previous_pressure is None:
+        return "気圧は安定しています", "→"
+
+    diff = current_pressure - previous_pressure
+
+    if diff <= -3:
+        return "気圧が大きく下降しています", "↓↓"
+    elif diff <= -1:
+        return "気圧が下降しています", "↓"
+    elif diff >= 3:
+        return "気圧が大きく上昇しています", "↑↑"
+    elif diff >= 1:
+        return "気圧が上昇しています", "↑"
+    else:
+        return "気圧はほぼ安定しています", "→"
+
+
+# =========================================================
+# 気象状況を自動判定
+# =========================================================
+def analyze_weather(current, forecast):
+    messages = []
+
+    temp = current.get("temperature")
+    humidity = current.get("humidity")
+    pressure = current.get("pressure")
+    pressure_previous = current.get("pressure_previous")
+    wind = current.get("wind")
+    symbol = current.get("symbol", "")
+
+    # 気圧
+    p_text, p_arrow = pressure_status(
+        pressure,
+        pressure_previous
+    )
+
+    messages.append({
+        "icon": "◉",
+        "title": p_text,
+        "text": "気圧の変化から、今後の天候変化に注意してください。"
+        if "下降" in p_text
+        else "大きな気圧変化はありません。"
+    })
+
+    # 霧
+    if humidity is not None and humidity >= 90:
+        messages.append({
+            "icon": "🌫️",
+            "title": "霧が発生しやすい状況",
+            "text": f"湿度が{humidity:.0f}%と高く、視界が悪くなる可能性があります。"
+        })
+
+    # 強風
+    if wind is not None and wind >= 10:
+        messages.append({
+            "icon": "🌬️",
+            "title": "強風に注意",
+            "text": f"風速が{wind:.1f}m/sに達する予想です。"
+        })
+    elif wind is not None and wind >= 7:
+        messages.append({
+            "icon": "🌬️",
+            "title": "風が強めです",
+            "text": f"風速は{wind:.1f}m/s前後です。"
+        })
+
+    # 雨・雷
+    if "thunder" in symbol.lower():
+        messages.append({
+            "icon": "⛈️",
+            "title": "雷雨に注意",
+            "text": "雷を伴う雨が予想されています。"
+        })
+    elif "heavyrain" in symbol.lower():
+        messages.append({
+            "icon": "🌧️",
+            "title": "強い雨に注意",
+            "text": "強い雨が予想されています。"
+        })
+    elif "rain" in symbol.lower():
+        messages.append({
+            "icon": "🌧️",
+            "title": "雨の予想",
+            "text": "今後数時間は雨に注意してください。"
+        })
+
+    # 24時間以内の大きな変化
+    pressures = [
+        x["pressure"]
+        for x in forecast
+        if x.get("pressure") is not None
+    ]
+
+    if len(pressures) >= 3:
+        pressure_change = pressures[-1] - pressures[0]
+
+        if pressure_change <= -5:
+            messages.append({
+                "icon": "⚠️",
+                "title": "今後24時間で気圧が大きく低下",
+                "text": "天候が大きく変化する可能性があります。"
+            })
+
+    # 何も特別なことがない場合
+    if len(messages) == 1:
+        messages.append({
+            "icon": "✓",
+            "title": "大きな荒天の兆候はありません",
+            "text": "現在のところ比較的安定した気象状況です。"
+        })
+
+    return messages, p_arrow
+
+
+# =========================================================
+# MET Norwayから取得
 # =========================================================
 def get_weather():
-
     params = {
         "lat": HOME_LAT,
         "lon": HOME_LON,
-        "altitude": HOME_ALTITUDE,
+        "altitude": HOME_ALTITUDE
     }
 
     response = requests.get(
-        API_URL,
+        MET_URL,
         params=params,
         headers=HEADERS,
         timeout=20
@@ -125,156 +266,246 @@ def get_weather():
 
     response.raise_for_status()
 
-    return response.json()
-
-
-# =========================================================
-# データ作成
-# =========================================================
-def build_weather():
-
-    data = get_weather()
+    data = response.json()
 
     timeseries = data["properties"]["timeseries"]
 
-    now = datetime.now(JST)
+    now = datetime.now(timezone.utc)
 
     records = []
 
     for item in timeseries:
+        time_string = item["time"]
 
         dt = datetime.fromisoformat(
-            item["time"].replace("Z", "+00:00")
-        ).astimezone(JST)
-
-        instant = item["data"].get(
-            "instant", {}
-        ).get("details", {})
-
-        next1 = item["data"].get(
-            "next_1_hours", {}
+            time_string.replace("Z", "+00:00")
         )
 
-        next6 = item["data"].get(
-            "next_6_hours", {}
+        instant = item.get("data", {}).get("instant", {})
+        details = instant.get("details", {})
+
+        next_hour = (
+            item.get("data", {})
+            .get("next_1_hours", {})
+            .get("details", {})
         )
 
-        details1 = next1.get("details", {})
-        details6 = next6.get("details", {})
-
-        symbol = None
-
-        summary1 = next1.get("summary")
-        summary6 = next6.get("summary")
-
-        if summary1:
-            symbol = summary1.get("symbol_code")
-
-        if not symbol and summary6:
-            symbol = summary6.get("symbol_code")
-
-        temp = value(
-            instant,
-            "air_temperature"
+        next_six = (
+            item.get("data", {})
+            .get("next_6_hours", {})
+            .get("details", {})
         )
 
-        sea_pressure = value(
-            instant,
-            "air_pressure_at_sea_level"
-        )
+        temperature = details.get("air_temperature")
+        humidity = details.get("relative_humidity")
+        sea_pressure = details.get("air_pressure_at_sea_level")
+        wind = details.get("wind_speed")
+        wind_deg = details.get("wind_from_direction")
 
-        surface_pressure = calculate_surface_pressure(
-            sea_pressure,
-            temp
-        )
-
-        precip = details1.get(
-            "precipitation_amount"
-        )
-
-        if precip is None:
-            precip = details6.get(
-                "precipitation_amount"
-            )
-
-        precipitation_probability = details1.get(
+        # 降水確率
+        rain_probability = next_hour.get(
             "probability_of_precipitation"
         )
 
-        if precipitation_probability is None:
-            precipitation_probability = details6.get(
+        if rain_probability is None:
+            rain_probability = next_six.get(
                 "probability_of_precipitation"
             )
 
-        records.append({
-            "time": dt,
-            "temp": temp,
-            "humidity": value(
-                instant,
-                "relative_humidity"
-            ),
-            "pressure": sea_pressure,
-            "surface_pressure": surface_pressure,
-            "wind": value(
-                instant,
-                "wind_speed"
-            ),
-            "wind_dir": value(
-                instant,
-                "wind_from_direction"
-            ),
-            "precip": precip,
-            "precip_probability": precipitation_probability,
-            "symbol": symbol,
-        })
-
-    current = min(
-        records,
-        key=lambda x: abs(
-            (x["time"] - now).total_seconds()
+        # 降水量
+        precipitation = next_hour.get(
+            "precipitation_amount"
         )
-    )
+
+        if precipitation is None:
+            precipitation = next_six.get(
+                "precipitation_amount"
+            )
+
+        # 天気
+        symbol = (
+            item.get("data", {})
+            .get("next_1_hours", {})
+            .get("summary", {})
+            .get("symbol_code")
+        )
+
+        if symbol is None:
+            symbol = (
+                item.get("data", {})
+                .get("next_6_hours", {})
+                .get("summary", {})
+                .get("symbol_code")
+            )
+
+        surface_pressure = calculate_surface_pressure(
+            sea_pressure,
+            temperature
+        )
+
+        records.append({
+            "dt": dt,
+            "temperature": temperature,
+            "humidity": humidity,
+            "sea_pressure": sea_pressure,
+            "pressure": surface_pressure,
+            "wind": wind,
+            "wind_deg": wind_deg,
+            "rain_probability": rain_probability,
+            "precipitation": precipitation,
+            "symbol": symbol
+        })
 
     future = [
         x for x in records
-        if x["time"] >= now - timedelta(hours=1)
+        if x["dt"] >= now
     ]
 
-    future = future[:25]
+    if not future:
+        future = records
 
-    return current, future
+    current = future[0]
+
+    # 現在の降水確率が取れない場合、
+    # 次に取得できる降水確率を使う
+    if current["rain_probability"] is None:
+        for item in future:
+            if item["rain_probability"] is not None:
+                current["rain_probability"] = item["rain_probability"]
+                break
+
+    # 前の気圧
+    previous_pressure = None
+
+    if len(future) > 1:
+        previous_pressure = future[1]["pressure"]
+
+    current["pressure_previous"] = previous_pressure
+
+    # 24時間分
+    forecast = future[:25]
+
+    for item in forecast:
+        item["time_jst"] = item["dt"].astimezone(JST).strftime("%H:%M")
+
+        if item["rain_probability"] is not None:
+            item["rain_probability"] = round(
+                item["rain_probability"]
+            )
+
+        if item["precipitation"] is not None:
+            item["precipitation"] = round(
+                item["precipitation"], 1
+            )
+
+        if item["temperature"] is not None:
+            item["temperature"] = round(
+                item["temperature"], 1
+            )
+
+        if item["wind"] is not None:
+            item["wind"] = round(
+                item["wind"], 1
+            )
+
+        if item["pressure"] is not None:
+            item["pressure"] = round(
+                item["pressure"], 1
+            )
+
+        item["icon"] = weather_icon(item["symbol"])
+        item["weather_name"] = weather_name(item["symbol"])
+        item["wind_direction"] = wind_direction(
+            item["wind_deg"]
+        )
+
+    # 現在値
+    current_temp = current["temperature"]
+    current_pressure = current["pressure"]
+
+    if current_temp is not None:
+        current_temp = round(current_temp, 1)
+
+    if current_pressure is not None:
+        current_pressure = round(current_pressure, 1)
+
+    if current["sea_pressure"] is not None:
+        sea_pressure_display = round(
+            current["sea_pressure"], 1
+        )
+    else:
+        sea_pressure_display = "—"
+
+    if current["humidity"] is not None:
+        humidity_display = round(current["humidity"])
+    else:
+        humidity_display = "—"
+
+    if current["wind"] is not None:
+        wind_display = round(current["wind"], 1)
+    else:
+        wind_display = "—"
+
+    if current["rain_probability"] is not None:
+        rain_probability_display = round(
+            current["rain_probability"]
+        )
+    else:
+        rain_probability_display = "—"
+
+    if current["precipitation"] is not None:
+        precipitation_display = round(
+            current["precipitation"], 1
+        )
+    else:
+        precipitation_display = "—"
+
+    current_data = {
+        "temperature": current_temp,
+        "humidity": humidity_display,
+        "pressure": current_pressure,
+        "sea_pressure": sea_pressure_display,
+        "wind": wind_display,
+        "wind_direction": wind_direction(
+            current["wind_deg"]
+        ),
+        "rain_probability": rain_probability_display,
+        "precipitation": precipitation_display,
+        "symbol": current["symbol"],
+        "weather": weather_name(current["symbol"]),
+        "icon": weather_icon(current["symbol"]),
+        "pressure_previous": previous_pressure
+    }
+
+    messages, pressure_arrow = analyze_weather(
+        current_data,
+        forecast
+    )
+
+    return {
+        "current": current_data,
+        "forecast": forecast,
+        "messages": messages,
+        "pressure_arrow": pressure_arrow,
+        "updated": datetime.now(JST).strftime(
+            "%Y/%m/%d %H:%M"
+        )
+    }
 
 
 # =========================================================
 # HTML
 # =========================================================
-HTML = r"""
+HTML = """
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
-
-<title>Weather</title>
+<title>奈良本 気象ダッシュボード</title>
 
 <style>
-
-@import url(
-'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500&family=Playfair+Display:wght@400;500&display=swap'
-);
-
-:root {
-    --bg: #171517;
-    --panel: #211e21;
-    --text: #eee8e8;
-    --muted: #a89ea2;
-    --rose: #c59aa6;
-    --line: rgba(197,154,166,.20);
-}
 
 * {
     box-sizing: border-box;
@@ -282,1361 +513,513 @@ HTML = r"""
 
 body {
     margin: 0;
-
     background:
-        radial-gradient(
-            circle at 75% 5%,
-            rgba(151,91,111,.15),
-            transparent 32%
-        ),
-        linear-gradient(
-            135deg,
-            #151315 0%,
-            #1a1719 50%,
-            #121113 100%
-        );
-
-    color: var(--text);
-
+        radial-gradient(circle at top right, #30272c 0%, #181617 38%, #111011 100%);
+    color: #eee8e9;
     font-family:
+        -apple-system,
+        BlinkMacSystemFont,
         "Noto Sans JP",
         sans-serif;
-
-    font-weight: 300;
-
-    min-height: 100vh;
 }
 
-.wrapper {
-    max-width: 1220px;
-    margin: auto;
-    padding: 44px 34px 60px;
+.container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 24px 50px;
 }
 
-
-/* HEADER */
-
-.header {
-
+header {
     display: flex;
-
     justify-content: space-between;
-
-    align-items: flex-end;
-
-    border-bottom:
-        1px solid var(--line);
-
-    padding-bottom: 20px;
-
-    margin-bottom: 30px;
+    align-items: end;
+    border-bottom: 1px solid #393235;
+    padding-bottom: 18px;
+    margin-bottom: 28px;
 }
 
 .location {
-
-    font-size: 13px;
-
-    letter-spacing: .14em;
-
-    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    color: #c8b8bd;
 }
 
 .location strong {
-
-    display: block;
-
-    color: var(--text);
-
-    font-size: 20px;
-
-    font-weight: 400;
-
-    letter-spacing: .06em;
-
-    margin-top: 6px;
+    color: #e3a6b6;
+    font-weight: 500;
 }
 
 .updated {
-
-    font-size: 11px;
-
-    color: var(--muted);
-
-    letter-spacing: .08em;
+    color: #81777b;
+    font-size: 12px;
 }
-
-
-/* HERO */
 
 .hero {
-
     display: grid;
-
-    grid-template-columns:
-        1.3fr .7fr;
-
-    gap: 1px;
-
-    background: var(--line);
-
-    border:
-        1px solid var(--line);
+    grid-template-columns: 1.2fr .8fr;
+    gap: 22px;
 }
 
-.hero-main {
-
-    background:
-        radial-gradient(
-            circle at 70% 40%,
-            rgba(197,154,166,.11),
-            transparent 38%
-        ),
-        var(--panel);
-
-    padding: 48px;
-
-    min-height: 300px;
+.panel {
+    background: rgba(31, 28, 29, .88);
+    border: 1px solid #3b3437;
+    border-radius: 18px;
+    padding: 28px;
+    box-shadow: 0 18px 45px rgba(0,0,0,.22);
 }
 
-.hero-side {
+.current {
+    min-height: 330px;
+}
 
-    background: var(--panel);
-
-    padding: 42px;
-
+.current-top {
     display: flex;
-
-    flex-direction: column;
-
-    justify-content: center;
+    align-items: center;
+    gap: 24px;
 }
 
-.current-label {
-
-    color: var(--muted);
-
-    font-size: 12px;
-
-    letter-spacing: .18em;
-
-    margin-bottom: 18px;
+.weather-icon {
+    font-size: 72px;
 }
 
-.temperature {
-
-    font-family:
-        "Playfair Display",
-        serif;
-
-    font-size:
-        clamp(76px, 10vw, 132px);
-
-    line-height: .9;
-
-    letter-spacing: -.04em;
+.temp {
+    font-family: Georgia, serif;
+    font-size: 74px;
+    line-height: 1;
+    color: #f1dfe4;
 }
 
-.temperature span {
-
-    font-family:
-        "Noto Sans JP",
-        sans-serif;
-
-    font-size: 24px;
-
-    color: var(--muted);
-
-    margin-left: 7px;
+.temp span {
+    font-size: 28px;
+    color: #a99da1;
 }
 
-.weather {
-
-    font-size: 22px;
-
-    margin-top: 20px;
-
-    letter-spacing: .08em;
+.weather-name {
+    margin-top: 10px;
+    color: #cbbec2;
+    font-size: 18px;
 }
 
-
-/* METRICS */
-
-.metric-list {
-
+.metrics {
+    margin-top: 30px;
     display: grid;
-
-    grid-template-columns:
-        1fr 1fr;
-
-    gap: 24px 32px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px 30px;
 }
 
 .metric {
-
-    border-bottom:
-        1px solid var(--line);
-
-    padding-bottom: 15px;
+    border-top: 1px solid #393336;
+    padding-top: 10px;
 }
 
 .metric-label {
-
-    color: var(--muted);
-
-    font-size: 11px;
-
-    letter-spacing: .12em;
-
-    margin-bottom: 7px;
+    color: #8f8589;
+    font-size: 12px;
 }
 
 .metric-value {
-
-    font-family:
-        "Playfair Display",
-        serif;
-
-    font-size: 28px;
-}
-
-.metric-unit {
-
-    font-family:
-        "Noto Sans JP",
-        sans-serif;
-
-    color: var(--muted);
-
-    font-size: 11px;
-
-    margin-left: 3px;
-}
-
-
-/* PRESSURE */
-
-.pressure-section {
-
-    margin-top: 1px;
-
-    border:
-        1px solid var(--line);
-
-    background:
-        var(--panel);
-
-    padding: 30px 42px;
-}
-
-.pressure-title {
-
-    font-size: 11px;
-
-    color: var(--muted);
-
-    letter-spacing: .18em;
-
-    margin-bottom: 18px;
-}
-
-.pressures {
-
-    display: flex;
-
-    align-items: baseline;
-
-    gap: 34px;
+    margin-top: 4px;
+    font-size: 17px;
 }
 
 .pressure-main {
-
-    font-family:
-        "Playfair Display",
-        serif;
-
-    font-size: 42px;
-}
-
-.pressure-secondary {
-
-    font-family:
-        "Playfair Display",
-        serif;
-
-    font-size: 27px;
-
-    color: var(--rose);
-}
-
-
-/* SECTION */
-
-.section {
-
-    margin-top: 36px;
-}
-
-.section-head {
-
-    display: flex;
-
-    justify-content:
-        space-between;
-
-    align-items:
-        baseline;
-
-    border-bottom:
-        1px solid var(--line);
-
-    padding-bottom: 14px;
-
-    margin-bottom: 1px;
-}
-
-.section-title {
-
-    font-family:
-        "Playfair Display",
-        serif;
-
-    font-size: 25px;
-}
-
-.section-sub {
-
-    color: var(--muted);
-
-    font-size: 11px;
-}
-
-
-/* TIMELINE */
-
-.timeline-wrap {
-
-    border:
-        1px solid var(--line);
-
-    border-top: none;
-
-    overflow-x: auto;
-
-    background: var(--panel);
-}
-
-.timeline {
-
-    display: grid;
-
-    grid-auto-flow: column;
-
-    grid-auto-columns: 108px;
-
-    min-width: max-content;
-}
-
-.hour {
-
-    padding:
-        20px 14px 23px;
-
-    border-right:
-        1px solid var(--line);
-
     text-align: center;
 }
 
-.hour.now {
+.pressure-label {
+    color: #958a8e;
+    letter-spacing: 2px;
+    font-size: 12px;
+}
 
-    background:
-        rgba(197,154,166,.08);
+.pressure-value {
+    font-family: Georgia, serif;
+    font-size: 56px;
+    margin-top: 20px;
+    color: #e8b0bf;
+}
+
+.pressure-sea {
+    font-size: 18px;
+    color: #aaa0a4;
+    margin-top: 4px;
+}
+
+.pressure-status {
+    margin-top: 22px;
+    padding: 15px;
+    background: #282325;
+    border-radius: 12px;
+    color: #d9cbd0;
+}
+
+.pressure-arrow {
+    color: #e3a6b6;
+    font-size: 24px;
+}
+
+.section {
+    margin-top: 24px;
+}
+
+.section-title {
+    font-size: 15px;
+    letter-spacing: 1.5px;
+    color: #d7c6ca;
+    margin-bottom: 12px;
+}
+
+.alerts {
+    display: grid;
+    gap: 10px;
+}
+
+.alert {
+    background: #252123;
+    border-left: 3px solid #b8788b;
+    border-radius: 10px;
+    padding: 14px 17px;
+}
+
+.alert-title {
+    font-size: 14px;
+    color: #e3c3ca;
+}
+
+.alert-text {
+    margin-top: 4px;
+    color: #9e9498;
+    font-size: 12px;
+}
+
+.forecast {
+    overflow-x: auto;
+    display: flex;
+    gap: 10px;
+    padding-bottom: 10px;
+}
+
+.hour {
+    min-width: 125px;
+    background: #211e20;
+    border: 1px solid #393235;
+    border-radius: 14px;
+    padding: 14px;
 }
 
 .hour-time {
-
-    color: var(--muted);
-
-    font-size: 11px;
-
-    margin-bottom: 15px;
+    color: #d5b5bd;
+    font-size: 13px;
 }
 
 .hour-temp {
-
-    font-family:
-        "Playfair Display",
-        serif;
-
+    font-family: Georgia, serif;
     font-size: 25px;
+    margin-top: 8px;
 }
 
 .hour-weather {
-
-    height: 37px;
-
-    margin-top: 10px;
-
-    font-size: 12px;
-
-    color: var(--rose);
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: center;
+    margin-top: 7px;
+    min-height: 42px;
+    font-size: 13px;
 }
 
 .hour-rain {
-
-    font-size: 11px;
-
-    color: var(--muted);
-
     margin-top: 9px;
+    color: #d9aeba;
+    font-size: 13px;
 }
 
 .hour-wind {
-
-    font-size: 10px;
-
-    color: var(--muted);
-
-    margin-top: 13px;
+    margin-top: 7px;
+    color: #9d9397;
+    font-size: 12px;
 }
 
-
-/* GRAPH */
-
-.graph {
-
-    border:
-        1px solid var(--line);
-
-    background:
-        var(--panel);
-
-    padding: 25px;
+footer {
+    margin-top: 28px;
+    color: #70686b;
+    font-size: 11px;
+    text-align: center;
 }
 
-canvas {
+@media (max-width: 800px) {
 
-    width: 100%;
-
-    height: 250px;
-}
-
-
-/* FOOTER */
-
-.footer {
-
-    margin-top: 35px;
-
-    padding-top: 18px;
-
-    border-top:
-        1px solid var(--line);
-
-    color: #746c70;
-
-    font-size: 10px;
-
-    line-height: 1.8;
-}
-
-
-/* MOBILE */
-
-@media (max-width: 760px) {
-
-    .wrapper {
-
-        padding:
-            25px 16px 40px;
+    .container {
+        padding: 18px 14px 40px;
     }
 
-    .header {
-
-        align-items:
-            flex-start;
+    header {
+        align-items: start;
+        gap: 10px;
     }
 
     .hero {
-
-        grid-template-columns:
-            1fr;
+        grid-template-columns: 1fr;
     }
 
-    .hero-main {
-
-        padding:
-            35px 27px;
+    .metrics {
+        grid-template-columns: 1fr 1fr;
     }
 
-    .hero-side {
-
-        padding:
-            30px 27px;
+    .temp {
+        font-size: 58px;
     }
 
-    .pressure-section {
-
-        padding:
-            25px 27px;
+    .weather-icon {
+        font-size: 58px;
     }
 
-    .temperature {
-
-        font-size: 88px;
+    .pressure-value {
+        font-size: 48px;
     }
-
 }
 
 </style>
-
 </head>
-
 
 <body>
 
-<div class="wrapper">
+<div class="container">
 
-
-<header class="header">
-
+<header>
     <div class="location">
-
-        IZU / SHIZUOKA
-
-        <strong>
-            奈良本｜標高 約500m
-        </strong>
-
+        <strong>奈良本</strong>｜標高 約500m
     </div>
 
     <div class="updated">
-        {{ updated }}
+        {{ weather.updated }}
     </div>
-
 </header>
 
 
-<section class="hero">
+<div class="hero">
+
+    <!-- 現在 -->
+    <div class="panel current">
+
+        <div class="current-top">
+
+            <div class="weather-icon">
+                {{ weather.current.icon }}
+            </div>
+
+            <div>
+                <div class="temp">
+                    {{ weather.current.temperature }}<span>°</span>
+                </div>
+
+                <div class="weather-name">
+                    {{ weather.current.weather }}
+                </div>
+            </div>
+
+        </div>
 
 
-<div class="hero-main">
+        <div class="metrics">
 
-    <div class="current-label">
-        自宅地点の予報
+            <div class="metric">
+                <div class="metric-label">湿度</div>
+                <div class="metric-value">
+                    {{ weather.current.humidity }}%
+                </div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">降水量</div>
+                <div class="metric-value">
+                    {{ weather.current.precipitation }} mm
+                </div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">降水確率</div>
+                <div class="metric-value">
+                    ☔ {{ weather.current.rain_probability }}%
+                </div>
+            </div>
+
+            <div class="metric">
+                <div class="metric-label">風</div>
+                <div class="metric-value">
+                    {{ weather.current.wind_direction }}
+                    {{ weather.current.wind }} m/s
+                </div>
+            </div>
+
+        </div>
+
     </div>
 
-    <div class="temperature">
 
-        {{ current_temp }}
+    <!-- 気圧 -->
+    <div class="panel pressure-main">
 
-        <span>℃</span>
+        <div class="pressure-label">
+            自宅の気圧
+        </div>
+
+        <div class="pressure-value">
+            {{ weather.current.pressure }}
+            <small style="font-size:20px;">hPa</small>
+        </div>
+
+        <div class="pressure-sea">
+            海面更正 {{ weather.current.sea_pressure }} hPa
+        </div>
+
+        <div class="pressure-status">
+            <div class="pressure-arrow">
+                {{ weather.pressure_arrow }}
+            </div>
+
+            {% if weather.pressure_arrow == "↓↓" %}
+                気圧が大きく下降しています
+            {% elif weather.pressure_arrow == "↓" %}
+                気圧が下降しています
+            {% elif weather.pressure_arrow == "↑↑" %}
+                気圧が大きく上昇しています
+            {% elif weather.pressure_arrow == "↑" %}
+                気圧が上昇しています
+            {% else %}
+                気圧は安定しています
+            {% endif %}
+
+        </div>
 
     </div>
 
-    <div class="weather">
-        {{ current_weather }}
+</div>
+
+
+<!-- 気象状況 -->
+<div class="section">
+
+    <div class="section-title">
+        現在の気象状況
+    </div>
+
+    <div class="alerts">
+
+        {% for alert in weather.messages %}
+
+        <div class="alert">
+
+            <div class="alert-title">
+                {{ alert.icon }} {{ alert.title }}
+            </div>
+
+            <div class="alert-text">
+                {{ alert.text }}
+            </div>
+
+        </div>
+
+        {% endfor %}
+
     </div>
 
 </div>
 
 
-<div class="hero-side">
+<!-- 24時間 -->
+<div class="section">
 
-<div class="metric-list">
+    <div class="section-title">
+        これから24時間
+    </div>
 
+    <div class="forecast">
 
-<div class="metric">
+        {% for item in weather.forecast %}
 
-<div class="metric-label">
-湿度
-</div>
+        <div class="hour">
 
-<div class="metric-value">
+            <div class="hour-time">
+                {{ item.time_jst }}
+            </div>
 
-{{ humidity }}
+            <div class="hour-temp">
+                {{ item.temperature }}°
+            </div>
 
-<span class="metric-unit">
-%
-</span>
+            <div class="hour-weather">
+                {{ item.icon }}
+                {{ item.weather_name }}
+            </div>
 
-</div>
+            <div class="hour-rain">
 
-</div>
+                {% if item["rain_probability"] is not none %}
+                    ☔ {{ item["rain_probability"] }}%
+                {% else %}
+                    ☔ —
+                {% endif %}
 
+                {% if item["precipitation"] is not none %}
+                    {{ item["precipitation"] }} mm
+                {% endif %}
 
-<div class="metric">
+            </div>
 
-<div class="metric-label">
-降水量
-</div>
+            <div class="hour-wind">
+                {{ item.wind_direction }}
+                {{ item.wind }}m/s
+            </div>
 
-<div class="metric-value">
+        </div>
 
-{{ precip }}
+        {% endfor %}
 
-<span class="metric-unit">
-mm
-</span>
-
-</div>
-
-</div>
-
-
-<div class="metric">
-
-<div class="metric-label">
-降水確率
-</div>
-
-<div class="metric-value">
-
-{{ pop }}
-
-<span class="metric-unit">
-%
-</span>
-
-</div>
+    </div>
 
 </div>
 
 
-<div class="metric">
-
-<div class="metric-label">
-風
-</div>
-
-<div class="metric-value">
-
-{{ wind }}
-
-<span class="metric-unit">
-m/s
-</span>
-
-</div>
-
-</div>
-
-
-<div class="metric">
-
-<div class="metric-label">
-風向
-</div>
-
-<div class="metric-value">
-{{ wind_dir }}
-</div>
-
-</div>
-
-
-<div class="metric">
-
-<div class="metric-label">
-海面更正気圧
-</div>
-
-<div class="metric-value">
-
-{{ pressure }}
-
-<span class="metric-unit">
-hPa
-</span>
-
-</div>
-
-</div>
-
-
-</div>
-
-</div>
-
-</section>
-
-
-<section class="pressure-section">
-
-<div class="pressure-title">
-気圧
-</div>
-
-<div class="pressures">
-
-<div class="pressure-main">
-
-{{ surface_pressure }}
-
-<span class="metric-unit">
-hPa
-</span>
-
-</div>
-
-<div class="pressure-secondary">
-
-{{ pressure }}
-
-<span class="metric-unit">
-hPa
-</span>
-
-</div>
-
-</div>
-
-</section>
-
-
-<section class="section">
-
-
-<div class="section-head">
-
-<div class="section-title">
-これから24時間
-</div>
-
-<div class="section-sub">
-1時間ごとの予報
-</div>
-
-</div>
-
-
-<div class="timeline-wrap">
-
-<div class="timeline">
-
-{% for item in forecast %}
-
-<div class="hour {% if loop.first %}now{% endif %}">
-
-<div class="hour-time">
-{{ item.time }}
-</div>
-
-<div class="hour-temp">
-{{ item.temp }}°
-</div>
-
-<div class="hour-weather">
-{{ item.weather }}
-</div>
-
-<div class="hour-rain">
-
-{% if item.pop is not none %}
-
-雨 {{ item.pop }}%
-
-{% else %}
-
-—
-
-{% endif %}
-
-</div>
-
-<div class="hour-rain">
-
-{% if item.precip is not none %}
-
-{{ item.precip }} mm
-
-{% else %}
-
-—
-
-{% endif %}
-
-</div>
-
-<div class="hour-wind">
-
-{{ item.wind_dir }}
-{{ item.wind }}m/s
-
-</div>
-
-</div>
-
-{% endfor %}
-
-</div>
-
-</div>
-
-</section>
-
-
-<!-- 気温 -->
-
-<section class="section">
-
-<div class="section-head">
-
-<div class="section-title">
-気温の推移
-</div>
-
-<div class="section-sub">
-24時間
-</div>
-
-</div>
-
-<div class="graph">
-
-<canvas id="temperatureChart"></canvas>
-
-</div>
-
-</section>
-
-
-<!-- 気圧 -->
-
-<section class="section">
-
-<div class="section-head">
-
-<div class="section-title">
-気圧の推移
-</div>
-
-<div class="section-sub">
-現地気圧・24時間
-</div>
-
-</div>
-
-<div class="graph">
-
-<canvas id="pressureChart"></canvas>
-
-</div>
-
-</section>
-
-
-<footer class="footer">
-
-予報地点：奈良本付近<br>
-
-標高：約500m（設定値）<br>
-
-気象予報データ：MET Norway Locationforecast
-
+<footer>
+    奈良本・自宅地点の予報 ｜ 標高 約500m ｜ MET Norway
 </footer>
 
-
 </div>
 
-
-<script>
-
-const forecast = {{ chart_data | safe }};
-
-
-/* =========================
-   共通グラフ
-========================= */
-
-function drawLineChart(
-    canvasId,
-    values,
-    unit
-) {
-
-    const canvas =
-        document.getElementById(canvasId);
-
-    const ctx =
-        canvas.getContext("2d");
-
-    function draw() {
-
-        const ratio =
-            window.devicePixelRatio || 1;
-
-        const width =
-            canvas.clientWidth;
-
-        const height =
-            canvas.clientHeight;
-
-        canvas.width =
-            width * ratio;
-
-        canvas.height =
-            height * ratio;
-
-        ctx.setTransform(
-            ratio,
-            0,
-            0,
-            ratio,
-            0,
-            0
-        );
-
-        const padding = {
-            left: 15,
-            right: 15,
-            top: 20,
-            bottom: 35
-        };
-
-        const w =
-            width -
-            padding.left -
-            padding.right;
-
-        const h =
-            height -
-            padding.top -
-            padding.bottom;
-
-        const nums =
-            values.map(x => x.value);
-
-        const min =
-            Math.floor(
-                Math.min(...nums) - 1
-            );
-
-        const max =
-            Math.ceil(
-                Math.max(...nums) + 1
-            );
-
-        const range =
-            Math.max(max - min, 1);
-
-
-        ctx.clearRect(
-            0,
-            0,
-            width,
-            height
-        );
-
-
-        /* 横線 */
-
-        ctx.strokeStyle =
-            "rgba(197,154,166,.12)";
-
-        ctx.lineWidth = 1;
-
-        for (let i = 0; i <= 4; i++) {
-
-            const y =
-                padding.top +
-                h * (i / 4);
-
-            ctx.beginPath();
-
-            ctx.moveTo(
-                padding.left,
-                y
-            );
-
-            ctx.lineTo(
-                width - padding.right,
-                y
-            );
-
-            ctx.stroke();
-
-
-            const label =
-                max -
-                range * (i / 4);
-
-            ctx.fillStyle =
-                "#8d8388";
-
-            ctx.font =
-                "10px sans-serif";
-
-            ctx.fillText(
-                label.toFixed(1) + unit,
-                padding.left,
-                y - 5
-            );
-        }
-
-
-        /* 線 */
-
-        ctx.beginPath();
-
-        values.forEach(
-            (item, index) => {
-
-                const x =
-                    padding.left +
-                    (index /
-                        (values.length - 1)
-                    ) * w;
-
-                const y =
-                    padding.top +
-                    (
-                        1 -
-                        (item.value - min)
-                        / range
-                    ) * h;
-
-                if (index === 0) {
-
-                    ctx.moveTo(x, y);
-
-                } else {
-
-                    ctx.lineTo(x, y);
-
-                }
-
-            }
-        );
-
-        ctx.strokeStyle =
-            "#c59aa6";
-
-        ctx.lineWidth = 2;
-
-        ctx.stroke();
-
-
-        /* 点 */
-
-        values.forEach(
-            (item, index) => {
-
-                const x =
-                    padding.left +
-                    (index /
-                        (values.length - 1)
-                    ) * w;
-
-                const y =
-                    padding.top +
-                    (
-                        1 -
-                        (item.value - min)
-                        / range
-                    ) * h;
-
-
-                ctx.beginPath();
-
-                ctx.arc(
-                    x,
-                    y,
-                    3,
-                    0,
-                    Math.PI * 2
-                );
-
-                ctx.fillStyle =
-                    "#211e21";
-
-                ctx.fill();
-
-                ctx.strokeStyle =
-                    "#c59aa6";
-
-                ctx.lineWidth = 1.5;
-
-                ctx.stroke();
-
-
-                if (index % 3 === 0) {
-
-                    ctx.fillStyle =
-                        "#8d8388";
-
-                    ctx.font =
-                        "10px sans-serif";
-
-                    ctx.textAlign =
-                        "center";
-
-                    ctx.fillText(
-                        item.time,
-                        x,
-                        height - 10
-                    );
-
-                }
-
-            }
-        );
-
-    }
-
-    draw();
-
-    window.addEventListener(
-        "resize",
-        draw
-    );
-}
-
-
-/* =========================
-   気温グラフ
-========================= */
-
-drawLineChart(
-    "temperatureChart",
-    forecast.map(x => ({
-        time: x.time,
-        value: x.temp
-    })),
-    "°"
-);
-
-
-/* =========================
-   気圧グラフ
-========================= */
-
-drawLineChart(
-    "pressureChart",
-    forecast.map(x => ({
-        time: x.time,
-        value: x.pressure
-    })),
-    " hPa"
-);
-
-</script>
-
 </body>
-
 </html>
 """
 
 
 # =========================================================
-# ページ
+# Flask
 # =========================================================
 @app.route("/")
 def index():
 
     try:
-
-        current, future = build_weather()
-
-
-        def fmt(value, digits=1):
-
-            if value is None:
-                return "—"
-
-            return f"{value:.{digits}f}"
-
-
-        forecast = []
-
-        chart_data = []
-
-
-        for item in future:
-
-            temp = item["temp"]
-
-            surface_pressure = item[
-                "surface_pressure"
-            ]
-
-
-            forecast.append({
-
-                "time":
-                    item["time"].strftime("%H:%M"),
-
-                "temp":
-                    fmt(temp, 1),
-
-                "weather":
-                    weather_name(
-                        item["symbol"]
-                    ),
-
-                "pop":
-                    round(
-                        item["precip_probability"]
-                    )
-                    if item[
-                        "precip_probability"
-                    ] is not None
-                    else None,
-
-                "precip":
-                    fmt(
-                        item["precip"],
-                        1
-                    )
-                    if item["precip"]
-                    is not None
-                    else None,
-
-                "wind":
-                    fmt(
-                        item["wind"],
-                        1
-                    ),
-
-                "wind_dir":
-                    wind_direction(
-                        item["wind_dir"]
-                    ),
-            })
-
-
-            if temp is not None and surface_pressure is not None:
-
-                chart_data.append({
-
-                    "time":
-                        item["time"].strftime(
-                            "%H:%M"
-                        ),
-
-                    "temp":
-                        round(
-                            temp,
-                            1
-                        ),
-
-                    "pressure":
-                        round(
-                            surface_pressure,
-                            1
-                        )
-                })
-
+        weather = get_weather()
 
         return render_template_string(
-
             HTML,
-
-            current_temp=
-                fmt(
-                    current["temp"],
-                    1
-                ),
-
-            current_weather=
-                weather_name(
-                    current["symbol"]
-                ),
-
-            humidity=
-                round(
-                    current["humidity"]
-                )
-                if current["humidity"]
-                is not None
-                else "—",
-
-            precip=
-                fmt(
-                    current["precip"],
-                    1
-                ),
-
-            pop=
-                round(
-                    current[
-                        "precip_probability"
-                    ]
-                )
-                if current[
-                    "precip_probability"
-                ] is not None
-                else "—",
-
-            wind=
-                fmt(
-                    current["wind"],
-                    1
-                ),
-
-            wind_dir=
-                wind_direction(
-                    current["wind_dir"]
-                ),
-
-            pressure=
-                fmt(
-                    current["pressure"],
-                    1
-                ),
-
-            surface_pressure=
-                fmt(
-                    current["surface_pressure"],
-                    1
-                ),
-
-            updated=
-                datetime.now(JST).strftime(
-                    "%Y.%m.%d  %H:%M"
-                ),
-
-            forecast=forecast,
-
-            chart_data=json.dumps(
-                chart_data,
-                ensure_ascii=False
-            )
+            weather=weather
         )
-
 
     except Exception as e:
 
         return f"""
         <html>
         <body style="
-            background:#171517;
+            background:#151314;
             color:#eee;
             font-family:sans-serif;
             padding:40px;
         ">
-
-        <h2>
-        気象データを取得できませんでした
-        </h2>
-
-        <p>
-        {str(e)}
-        </p>
-
+        <h2>気象データを取得できませんでした</h2>
+        <p>{str(e)}</p>
         </body>
         </html>
         """, 500
 
 
 if __name__ == "__main__":
-
     app.run(
         host="0.0.0.0",
         port=5000,
