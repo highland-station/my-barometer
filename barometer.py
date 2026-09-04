@@ -211,8 +211,7 @@ def index():
         or coast_fallback
     )
 
-
-    # 麓の気温を500m地点の時間に合わせる
+    # 麓の気温
     coast_temp = coast_df[
         ["Time", "Temp"]
     ].rename(
@@ -237,12 +236,10 @@ def index():
 
         current = df.iloc[0]
 
-        # 標高500m地点の実際の気圧
         current_press = float(
             current["SurfacePress"]
         )
 
-        # 海面更正気圧
         current_msl_press = float(
             current["PressMSL"]
         )
@@ -332,7 +329,7 @@ def index():
         )
 
 
-    # 24時間予報の表
+    # 24時間予報
     rows_html = ""
 
     for _, row in df.iterrows():
@@ -397,7 +394,7 @@ def index():
                 <br>
 
                 <span class="small-value">
-                    {float(row["CoastTemp"]):.1f}℃
+                    麓 {float(row["CoastTemp"]):.1f}℃
                 </span>
             </td>
 
@@ -428,7 +425,9 @@ def index():
 
         <meta
             name="viewport"
-            content="width=device-width, initial-scale=1.0"
+            content="width=device-width,
+                     initial-scale=1.0,
+                     maximum-scale=1.0"
         >
 
         <meta
@@ -448,7 +447,15 @@ def index():
             }}
 
 
+            html {{
+                width: 100%;
+                overflow-x: hidden;
+            }}
+
+
             body {{
+
+                width: 100%;
 
                 font-family:
                     -apple-system,
@@ -465,10 +472,14 @@ def index():
                 margin: 0;
 
                 padding: 20px;
+
+                overflow-x: hidden;
             }}
 
 
             .container {{
+
+                width: 100%;
 
                 max-width: 1400px;
 
@@ -486,7 +497,11 @@ def index():
             }}
 
 
+            /* 現在の情報 */
+
             .current-box {{
+
+                width: 100%;
 
                 background: #1f2937;
 
@@ -494,7 +509,7 @@ def index():
 
                 border-radius: 14px;
 
-                padding: 25px 18px;
+                padding: 26px 18px;
 
                 margin-bottom: 22px;
             }}
@@ -502,9 +517,12 @@ def index():
 
             .grid-container {{
 
-                display: flex;
+                display: grid;
 
-                justify-content: space-around;
+                grid-template-columns:
+                    repeat(5, 1fr);
+
+                width: 100%;
 
                 text-align: center;
             }}
@@ -512,9 +530,9 @@ def index():
 
             .grid-item {{
 
-                flex: 1;
+                min-width: 0;
 
-                padding: 0 10px;
+                padding: 0 12px;
             }}
 
 
@@ -543,7 +561,11 @@ def index():
 
                 font-weight: 700;
 
+                line-height: 1.4;
+
                 margin-top: 5px;
+
+                white-space: nowrap;
             }}
 
 
@@ -554,10 +576,16 @@ def index():
                 color: #9ca3af;
 
                 font-weight: normal;
+
+                white-space: nowrap;
             }}
 
 
+            /* 気圧メッセージ */
+
             .alert-banner {{
+
+                width: 100%;
 
                 background: {alert_bg};
 
@@ -593,11 +621,17 @@ def index():
             }}
 
 
+            /* 表 */
+
             .table-wrapper {{
+
+                width: 100%;
 
                 overflow-x: auto;
 
                 -webkit-overflow-scrolling: touch;
+
+                border-radius: 8px;
             }}
 
 
@@ -605,7 +639,7 @@ def index():
 
                 width: 100%;
 
-                min-width: 900px;
+                min-width: 850px;
 
                 border-collapse: collapse;
 
@@ -665,40 +699,190 @@ def index():
             }}
 
 
+            /* ========================= */
+            /* スマホ */
+            /* ========================= */
+
             @media (max-width: 700px) {{
 
                 body {{
-                    padding: 8px;
+
+                    padding: 0;
+
+                    background: #ffffff;
                 }}
+
 
                 .container {{
-                    padding: 14px;
+
+                    width: 100%;
+
+                    max-width: none;
+
+                    padding: 10px;
+
+                    border-radius: 0;
+
+                    box-shadow: none;
                 }}
+
 
                 .current-box {{
-                    padding: 18px 8px;
+
+                    padding: 18px 6px;
+
+                    border-radius: 12px;
+
+                    margin-bottom: 14px;
                 }}
+
 
                 .grid-container {{
-                    flex-wrap: wrap;
+
+                    grid-template-columns:
+                        repeat(3, 1fr);
+
+                    row-gap: 20px;
                 }}
+
 
                 .grid-item {{
-                    flex-basis: 33.333%;
 
-                    margin-bottom: 15px;
+                    padding: 0 3px;
                 }}
 
+
                 .grid-item:not(:last-child) {{
+
                     border-right: none;
                 }}
 
-                .current-val {{
-                    font-size: 16px;
-                }}
 
                 .label {{
+
                     font-size: 11px;
+
+                    margin-bottom: 4px;
+                }}
+
+
+                .current-val {{
+
+                    font-size: 16px;
+
+                    line-height: 1.35;
+                }}
+
+
+                .small-current {{
+
+                    font-size: 10px;
+                }}
+
+
+                .alert-banner {{
+
+                    padding: 12px;
+
+                    margin-bottom: 16px;
+
+                    font-size: 12px;
+
+                    line-height: 1.6;
+                }}
+
+
+                .section-title {{
+
+                    font-size: 16px;
+
+                    margin-top: 14px;
+
+                    margin-bottom: 8px;
+                }}
+
+
+                .table-wrapper {{
+
+                    width: 100%;
+
+                    overflow-x: auto;
+                }}
+
+
+                table {{
+
+                    min-width: 850px;
+
+                    font-size: 13px;
+                }}
+
+
+                th {{
+
+                    padding: 11px 8px;
+
+                    font-size: 12px;
+                }}
+
+
+                td {{
+
+                    padding: 12px 8px;
+                }}
+
+
+                .note {{
+
+                    font-size: 10px;
+
+                    margin-top: 14px;
+
+                    padding-bottom: 10px;
+                }}
+
+            }}
+
+
+            /* ========================= */
+            /* 小さいスマホ */
+            /* ========================= */
+
+            @media (max-width: 400px) {{
+
+                .container {{
+
+                    padding: 8px;
+                }}
+
+
+                .current-box {{
+
+                    padding: 16px 3px;
+                }}
+
+
+                .grid-container {{
+
+                    row-gap: 18px;
+                }}
+
+
+                .label {{
+
+                    font-size: 10px;
+                }}
+
+
+                .current-val {{
+
+                    font-size: 15px;
+                }}
+
+
+                .small-current {{
+
+                    font-size: 9px;
                 }}
 
             }}
