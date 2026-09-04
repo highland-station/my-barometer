@@ -129,7 +129,7 @@ def get_weather_string(code):
 
     data_error = highland_fallback or coast_fallback
 
-    # 時間のズレを救済してマージ
+    # 拠点のデータを時間軸で確実に結合
     coast_temp = coast_df[["Time", "Temp"]].rename(
         columns={"Temp": "CoastTemp"}
     )
@@ -138,6 +138,7 @@ def get_weather_string(code):
     df = df.sort_values("Time").ffill().bfill()
     df["CoastTemp"] = df["CoastTemp"].fillna(df["Temp"])
 
+    # 🌟【Python 3.14対応バグ修正】 df.iloc の後ろに直接 [0] をつけて安全に1行目を抽出
     if not df.empty:
         current = df.iloc[0]
         current_press = current["SurfacePress"]
@@ -207,7 +208,7 @@ def get_weather_string(code):
             status_color = "#057a55"
             row_bg = ""
 
-        # 🌟 テーブル内の気温から「麓:」表記を削除し「現地 / 麓」の数値のみにスッキリ変更
+        # 🌟「麓:」表記を削除し、数値のみのスッキリしたレイアウトをキープ
         rows_html += f"""
         <tr style="{row_bg}">
             <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">{row["Time"].strftime("%H:%M")}</td>
@@ -266,8 +267,8 @@ def get_weather_string(code):
                         <div class="current-val" style="color:#fbbf24;">{current_press:.1f} hPa<br><span style="font-size:10px;color:#9ca3af;font-weight:normal;">({current_forecast_press:.1f} hPa)</span></div>
                     </div>
                     <div class="grid-item">
-                        <div class="label">現在の天気</div>
 
+現在の天気
 {current_weather}
 
 
