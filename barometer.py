@@ -2765,19 +2765,285 @@ body {
 
     {% if forecasts %}
 
-    <div class="hourly">
+   {% if forecasts %}
 
-        <div class="hour-row header-row">
+<div class="hourly">
 
-            <div>時間</div>
-            <div>天気</div>
-            <div>状況</div>
-            <div>気温</div>
-            <div>降水量</div>
-            <div>気圧</div>
-            <div>麓への移動</div>
+    <div class="hour-row header-row">
+
+        <div>時間</div>
+        <div>天気</div>
+        <div>状況</div>
+        <div>気温</div>
+        <div>降水量</div>
+        <div>気圧</div>
+        <div>麓への移動</div>
+
+    </div>
+
+
+    {% for item in forecasts %}
+
+    <div class="
+        hour-row
+        {% if item.travel_level == 'danger' %}
+            row-danger
+        {% elif item.travel_level == 'attention' or item.health_level != 'normal' %}
+            row-attention
+        {% endif %}
+    ">
+
+        <!-- 時間 -->
+
+        <div class="hour-time">
+            {{ item.dt.strftime("%H:%M") }}
+        </div>
+
+
+        <!-- 天気 -->
+
+        <div class="hour-icon">
+
+            {{ item.icon }}
+
+            <span class="hour-weather-name">
+                {{ item.display_weather }}
+            </span>
 
         </div>
+
+
+        <!-- 状況 -->
+
+        <div class="hour-condition">
+
+            {% if item.display_weather == "強い雨" %}
+
+                強い雨
+
+            {% elif item.display_weather == "雷雨" %}
+
+                雷雨
+
+            {% elif item.display_weather == "雨" %}
+
+                雨
+
+            {% elif item.display_weather == "弱い雨" %}
+
+                弱い雨
+
+            {% elif item.display_weather == "霧" %}
+
+                霧
+
+            {% elif item.display_weather == "雪" %}
+
+                雪
+
+            {% elif item.display_weather == "みぞれ" %}
+
+                みぞれ
+
+            {% elif "くもり" in item.display_weather %}
+
+                くもり
+
+            {% elif "晴れ" in item.display_weather %}
+
+                晴れ
+
+            {% else %}
+
+                {{ item.display_weather }}
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- 気温 -->
+
+        <div class="
+            hour-temp
+
+            {% if item.temperature is none %}
+
+                temp-unknown
+
+            {% elif item.temperature < 5 %}
+
+                temp-under-5
+
+            {% elif item.temperature < 10 %}
+
+                temp-5-9
+
+            {% elif item.temperature < 15 %}
+
+                temp-10-14
+
+            {% elif item.temperature < 20 %}
+
+                temp-15-19
+
+            {% elif item.temperature < 25 %}
+
+                temp-20-24
+
+            {% elif item.temperature < 30 %}
+
+                temp-25-29
+
+            {% elif item.temperature < 35 %}
+
+                temp-30-34
+
+            {% else %}
+
+                temp-35-plus
+
+            {% endif %}
+        ">
+
+            {% if item.temperature is not none %}
+
+                {{ "%.1f"|format(item.temperature) }}℃
+
+            {% else %}
+
+                —
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- 降水量 -->
+
+        <div class="
+            hour-rain
+
+            {% if item.precipitation is none
+                  or item.precipitation == 0 %}
+
+                rain-none
+
+            {% elif item.precipitation >= 5 %}
+
+                rain-heavy
+
+            {% endif %}
+        ">
+
+            {% if item.precipitation is not none %}
+
+                {{ "%.1f"|format(item.precipitation) }}mm
+
+            {% else %}
+
+                —
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- 気圧 -->
+
+        <div class="hour-pressure">
+
+            {% if item.surface_pressure is not none %}
+
+                <span class="pressure-number">
+                    {{ "%.1f"|format(item.surface_pressure) }}hPa
+                </span>
+
+                {% if item.pressure_change is not none %}
+
+                    <span class="
+                        pressure-change
+                        {% if item.pressure_level == 'strong-fall'
+                              or item.pressure_level == 'strong-rise' %}
+                            strong
+                        {% elif item.pressure_level == 'fall' %}
+                            fall
+                        {% elif item.pressure_level == 'rise' %}
+                            rise
+                        {% endif %}
+                    ">
+
+                        {% if item.pressure_change > 0 %}
+                            ↑
+                        {% elif item.pressure_change < 0 %}
+                            ↓
+                        {% else %}
+                            →
+                        {% endif %}
+
+                        {{ "%+.1f"|format(item.pressure_change) }}hPa / 3時間
+
+                    </span>
+
+                {% endif %}
+
+            {% else %}
+
+                —
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- 麓への移動 -->
+
+        <div>
+
+            {% if item.travel_level == "danger" %}
+
+                <div class="
+                    travel-status
+                    travel-danger
+                ">
+                    🔴 注意
+                </div>
+
+            {% elif item.travel_level == "attention" %}
+
+                <div class="
+                    travel-status
+                    travel-attention
+                ">
+                    🟠 注意
+                </div>
+
+            {% else %}
+
+                <div class="
+                    travel-status
+                    travel-good
+                ">
+                    🟢 比較的良好
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+</div>
+
+{% else %}
+
+<div class="error">
+    自宅地点の予報データを取得できませんでした。
+</div>
+
+{% endif %}
 
 
         {% for item in forecasts %}
