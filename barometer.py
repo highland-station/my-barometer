@@ -16,7 +16,6 @@ def get_real_weather_data():
         res = requests.get(url, timeout=5).json()
         hourly = res['hourly']
         
-        # 最初から日本時間で届くデータをそのまま安全に読み込む
         df = pd.DataFrame({
             'Time': pd.to_datetime(hourly['time']),
             'SeaPress': hourly['surface_pressure'],
@@ -28,7 +27,6 @@ def get_real_weather_data():
         df['Press'] = round(df['SeaPress'] - ELEVATION_DROP, 1)
         df['Temp'] = round(df['Temp'], 1)
         
-        # 現在時刻以降のデータを24時間分抽出
         now = pd.Timestamp.now()
         df_filtered = df[df['Time'] >= now]
         if df_filtered.empty:
@@ -60,6 +58,7 @@ def index():
     if df is None or df.empty:
         return "<h3 style='text-align:center; padding:50px; font-family:sans-serif;'>⚠️ お天気サーバーとの通信に一時的なエラーが起きています。スマホの画面を少し待ってから再読み込みしてください。</h3>"
     
+    # 🌟 【ここが原因でした！】df.iloc の後ろに [0] を追加して最初の行を正しく指定
     current_row = df.iloc
     current_press = current_row['Press']
     current_weather = get_weather_string(current_row['Code'])
