@@ -2,12 +2,15 @@ from flask import Flask
 import pandas as pd
 import requests
 import os
+import time
 
 app = Flask(__name__)
 
+# 麓（伊豆熱川駅付近）
 COAST_LAT = 34.8156
 COAST_LON = 139.0684
 
+# 標高約500m
 HIGHLAND_LAT = 34.8346
 HIGHLAND_LON = 139.0481
 
@@ -60,13 +63,13 @@ def pressure_status(pressure):
     return "安定", "normal"
 
 
-def get_weather(latitude, longitude):
+def get_weather():
 
     url = "https://api.open-meteo.com/v1/forecast"
 
     params = {
-        "latitude": latitude,
-        "longitude": longitude,
+        "latitude": f"{HIGHLAND_LAT},{COAST_LAT}",
+        "longitude": f"{HIGHLAND_LON},{COAST_LON}",
         "hourly": (
             "pressure_msl,"
             "surface_pressure,"
@@ -79,15 +82,79 @@ def get_weather(latitude, longitude):
         "forecast_days": 2,
     }
 
-    response = requests.get(
-        url,
-        params=params,
-        timeout=15
+    headers = {
+        "User-Agent": "IzuAtagawaWeather/1.0"
+    }
+
+    last_error = None
+
+    # 最大3回まで試す
+    for attempt in range(3):
+
+        try:
+
+            response = requests.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=20
+            )
+
+            if response.status_code == 429:
+
+                # APIから指定された待ち時間があれば利用
+                retry_after = response.headers.get(
+                    "Retry-After"
+                )
+
+                if retry_after:
+                    try:
+                        wait_time = min(
+                            int(retry_after),
+                            30
+                        )
+                    except ValueError:
+                        wait_time = 5
+                else:
+                    wait_time = 5 * (attempt + 1)
+
+                time.sleep(wait_time)
+
+                continue
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            # 複数地点のレスポンス
+            if not isinstance(data, list):
+                raise Exception(
+                    "天気APIから想定外のデータが返されました"
+                )
+
+            if len(data) < 2:
+                raise Exception(
+                    "2地点分のデータを取得できませんでした"
+                )
+
+            return data[0], data[1]
+
+        except requests.RequestException as e:
+
+            last_error = e
+
+            if attempt < 2:
+                time.sleep(3 * (attempt + 1))
+                continue
+
+            raise last_error
+
+    raise Exception(
+        "天気データを取得できませんでした"
     )
 
-    response.raise_for_status()
 
-    data = response.json()
+def make_dataframe(data):
 
     hourly = data["hourly"]
 
@@ -108,14 +175,14 @@ def get_weather(latitude, longitude):
 
 def get_24_hours():
 
-    highland = get_weather(
-        HIGHLAND_LAT,
-        HIGHLAND_LON
+    highland_data, coast_data = get_weather()
+
+    highland = make_dataframe(
+        highland_data
     )
 
-    coast = get_weather(
-        COAST_LAT,
-        COAST_LON
+    coast = make_dataframe(
+        coast_data
     )
 
     now = pd.Timestamp.now(
@@ -141,7 +208,13 @@ def index():
         highland, coast = get_24_hours()
 
         if len(highland) == 0:
-            raise Exception("予報データがありません")
+            raise Exception(
+                "予報データがありません"
+            )
+
+        # ---------------------------------
+        # 現在に最も近いデータ
+        # ---------------------------------
 
         current = highland.iloc[0]
 
@@ -178,12 +251,13 @@ def index():
         )
 
         temp_difference = (
-            current_temp - coast_current_temp
+            current_temp
+            - coast_current_temp
         )
 
 
         # ---------------------------------
-        # 24時間カード
+        # 24時間予報
         # ---------------------------------
 
         forecast_cards = ""
@@ -325,19 +399,15 @@ def index():
 
 <title>伊豆熱川 Weather</title>
 
-
 <style>
-
 
 * {
     box-sizing: border-box;
 }
 
-
 html {
     overflow-x: hidden;
 }
-
 
 body {
 
@@ -362,7 +432,6 @@ body {
    MAIN
 ========================= */
 
-
 .container {
 
     width: min(
@@ -379,7 +448,6 @@ body {
 /* =========================
    CURRENT
 ========================= */
-
 
 .current {
 
@@ -478,7 +546,6 @@ body {
 /* =========================
    CURRENT DATA
 ========================= */
-
 
 .current-data {
 
@@ -602,7 +669,6 @@ body {
    24 HOURS
 ========================= */
 
-
 .forecast-section {
 
     background: #E7E3E2;
@@ -651,7 +717,6 @@ body {
    GRID
 ========================= */
 
-
 .forecast-grid {
 
     display: grid;
@@ -666,7 +731,6 @@ body {
 /* =========================
    CARD
 ========================= */
-
 
 .forecast-card {
 
@@ -881,7 +945,6 @@ body {
    TABLET
 ========================= */
 
-
 @media (max-width: 1100px) {
 
     .current {
@@ -890,12 +953,10 @@ body {
             repeat(2, 1fr);
     }
 
-
     .current-main {
 
         grid-row: span 2;
     }
-
 
     .forecast-grid {
 
@@ -909,7 +970,6 @@ body {
 /* =========================
    MOBILE
 ========================= */
-
 
 @media (max-width: 700px) {
 
@@ -1019,7 +1079,6 @@ body {
    SMALL MOBILE
 ========================= */
 
-
 @media (max-width: 380px) {
 
     .container {
@@ -1047,7 +1106,6 @@ body {
 
 }
 
-
 </style>
 
 </head>
@@ -1055,11 +1113,7 @@ body {
 
 <body>
 
-
 <main class="container">
-
-
-    <!-- 現在 -->
 
 
     <section class="current">
@@ -1161,9 +1215,6 @@ body {
     </section>
 
 
-    <!-- 24時間 -->
-
-
     <section class="forecast-section">
 
 
@@ -1192,13 +1243,11 @@ body {
 
 </main>
 
-
 </body>
 
 </html>
 """
 
-        # HTML側のデータを安全に差し込む
         html = html.format(
             current_weather=current_weather,
             current_temp=current_temp,
