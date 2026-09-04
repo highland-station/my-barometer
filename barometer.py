@@ -4,21 +4,11 @@ import requests
 
 app = Flask(__name__)
 
-# =========================
-# 場所
-# =========================
-
 COAST_LAT = 34.8156
 COAST_LON = 139.0684
 
 HIGHLAND_LAT = 34.8346
 HIGHLAND_LON = 139.0481
-HIGHLAND_ELEVATION = 500
-
-
-# =========================
-# 天気コード
-# =========================
 
 WEATHER_CODES = {
     0: "☀️ 快晴",
@@ -56,26 +46,17 @@ def weather_text(code):
     return WEATHER_CODES.get(int(code), "☁️ くもり")
 
 
-# =========================
-# 気圧状態
-# =========================
-
 def pressure_status(pressure):
-
     pressure = float(pressure)
 
     if pressure <= 1005:
-        return "⚠️ 注意", "danger"
+        return "注意", "danger"
 
     if pressure <= 1010:
-        return "⚠️ やや低め", "warning"
+        return "やや低め", "warning"
 
-    return "✓ 安定", "normal"
+    return "安定", "normal"
 
-
-# =========================
-# Open-Meteo
-# =========================
 
 def get_weather(latitude, longitude):
 
@@ -123,10 +104,6 @@ def get_weather(latitude, longitude):
     return df
 
 
-# =========================
-# 24時間取得
-# =========================
-
 def get_24_hours():
 
     highland = get_weather(
@@ -154,10 +131,6 @@ def get_24_hours():
     return highland, coast
 
 
-# =========================
-# メイン
-# =========================
-
 @app.route("/")
 def index():
 
@@ -166,21 +139,15 @@ def index():
         highland, coast = get_24_hours()
 
         if len(highland) == 0:
-            raise Exception(
-                "予報データがありません"
-            )
-
-        # =====================
-        # 現在値
-        # =====================
+            raise Exception("予報データがありません")
 
         current = highland.iloc[0]
 
-        current_press = float(
+        current_surface = float(
             current["SurfacePress"]
         )
 
-        current_msl_press = float(
+        current_msl = float(
             current["PressMSL"]
         )
 
@@ -201,13 +168,8 @@ def index():
         )
 
         status_text, status_class = pressure_status(
-            current_msl_press
+            current_msl
         )
-
-
-        # =====================
-        # 24時間カード
-        # =====================
 
         forecast_cards = ""
 
@@ -222,9 +184,9 @@ def index():
             else:
                 coast_row = coast.iloc[-1]
 
-            time_text = row[
-                "Time"
-            ].strftime("%m/%d %H:%M")
+            time_text = row["Time"].strftime(
+                "%m/%d %H:%M"
+            )
 
             weather = weather_text(
                 row["WeatherCode"]
@@ -258,81 +220,66 @@ def index():
                 msl_press
             )
 
-
             forecast_cards += f"""
+            <article class="forecast-card">
 
-            <div class="forecast-card">
+                <div class="forecast-top">
+                    <span class="forecast-time">
+                        {time_text}
+                    </span>
 
-                <div class="forecast-time">
-                    {time_text}
+                    <span class="forecast-status {status_cls}">
+                        {status}
+                    </span>
                 </div>
 
                 <div class="forecast-weather">
                     {weather}
                 </div>
 
-                <div class="forecast-row">
-                    <span>🌡️ 気温</span>
-                    <strong>
-                        {temp:.1f}℃
-                    </strong>
+                <div class="temperature">
+                    {temp:.1f}<small>℃</small>
                 </div>
 
-                <div class="forecast-row small-row">
-                    <span>麓</span>
-                    <span>
-                        {coast_temp:.1f}℃
-                    </span>
-                </div>
-
-                <div class="forecast-row">
-                    <span>💧 湿度</span>
-                    <strong>
-                        {humidity:.0f}%
-                    </strong>
-                </div>
-
-                <div class="forecast-pressure">
+                <div class="details">
 
                     <div>
-                        気圧
+                        <span>麓</span>
+                        <strong>{coast_temp:.1f}℃</strong>
                     </div>
 
+                    <div>
+                        <span>湿度</span>
+                        <strong>{humidity:.0f}%</strong>
+                    </div>
+
+                    <div>
+                        <span>降水</span>
+                        <strong>{precip:.1f}mm</strong>
+                    </div>
+
+                </div>
+
+                <div class="pressure">
+
+                    <span>気圧</span>
+
                     <strong>
-                        {surface_press:.1f} hPa
+                        {surface_press:.1f}
+                        <small>hPa</small>
                     </strong>
 
-                    <span>
-                        {msl_press:.1f} hPa
-                    </span>
+                    <em>
+                        {msl_press:.1f}
+                        hPa
+                    </em>
 
                 </div>
 
-                <div class="forecast-row">
-
-                    <span>🌧️ 降水</span>
-
-                    <strong>
-                        {precip:.1f} mm
-                    </strong>
-
-                </div>
-
-                <div class="forecast-status {status_cls}">
-                    {status}
-                </div>
-
-            </div>
-
+            </article>
             """
 
-
-        # =========================
-        # HTML
-        # =========================
-
         html = f"""
-
 <!DOCTYPE html>
 
 <html lang="ja">
@@ -344,740 +291,713 @@ def index():
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>伊豆熱川 気圧・天気</title>
-
+<title>伊豆熱川 Weather</title>
 
 <style>
 
-/* =========================
-   基本
-   ========================= */
-
-* {{
+* {
     box-sizing: border-box;
-}}
+}
 
-html,
-body {{
+html {
+    overflow-x: hidden;
+}
+
+body {
+
     margin: 0;
-    padding: 0;
-    width: 100%;
-}}
-
-body {{
-
-    font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        "Noto Sans JP",
-        sans-serif;
 
     background: #F3F1F0;
 
     color: #303033;
 
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Helvetica Neue",
+        "Yu Gothic",
+        sans-serif;
+
     overflow-x: hidden;
-}}
+}
 
 
 /* =========================
-   全体
-   ========================= */
+   MAIN
+========================= */
 
-.container {{
+.container {
 
-    width: 100%;
-
-    max-width: 1600px;
+    width: min(
+        1500px,
+        calc(100% - 48px)
+    );
 
     margin: 0 auto;
 
-    padding:
-        24px
-        30px
-        40px;
-}}
+    padding: 34px 0 60px;
+}
 
 
 /* =========================
-   現在状況
-   ========================= */
+   CURRENT
+========================= */
 
-.current-box {{
-
-    background: #A85D72;
-
-    border-radius: 20px;
-
-    padding: 28px;
-
-    box-shadow:
-        0 6px 20px rgba(
-            88,
-            55,
-            65,
-            0.18
-        );
-
-    margin-bottom: 30px;
-}}
-
-
-.current-grid {{
+.current {
 
     display: grid;
 
     grid-template-columns:
-        1.5fr
-        1fr
+        1.35fr
         1fr
         1fr
         1fr;
 
-    gap: 16px;
-}}
+    gap: 1px;
+
+    background: #704252;
+
+    border-radius: 24px;
+
+    overflow: hidden;
+
+    box-shadow:
+        0 18px 45px
+        rgba(48,48,51,.12);
+
+    margin-bottom: 42px;
+}
 
 
-.current-item {{
+.current-main {
 
-    background: #FAFAF9;
+    background: #A85D72;
 
-    border-radius: 14px;
+    color: white;
 
-    padding: 18px;
-
-    text-align: center;
-
-    min-height: 125px;
+    padding: 34px 38px;
 
     display: flex;
 
     flex-direction: column;
 
     justify-content: center;
-}}
+}
 
 
-.current-item.main-pressure {{
+.current-label {
 
-    background: #FFFFFF;
-}}
+    font-size: 14px;
 
+    letter-spacing: .12em;
 
-.label {{
+    opacity: .8;
 
-    font-size: 15px;
-
-    color: #704252;
-
-    margin-bottom: 8px;
-}}
+    margin-bottom: 10px;
+}
 
 
-.current-val {{
+.current-weather {
 
     font-size: 28px;
 
-    font-weight: 700;
+    font-weight: 600;
 
-    line-height: 1.35;
-
-    color: #303033;
-}}
+    margin-bottom: 16px;
+}
 
 
-.small-current {{
+.current-temp {
 
-    font-size: 17px;
+    font-size: 68px;
 
-    color: #81777A;
+    line-height: 1;
 
-    font-weight: 500;
-}}
+    font-weight: 300;
 
-
-.weather-current {{
-
-    font-size: 23px;
-
-    font-weight: 700;
-
-    color: #303033;
-}}
+    letter-spacing: -.04em;
+}
 
 
-/* =========================
-   アラート
-   ========================= */
+.current-temp small {
 
-.alert {{
+    font-size: 24px;
+
+    margin-left: 4px;
+}
+
+
+.current-place {
 
     margin-top: 18px;
 
-    padding: 12px 16px;
+    font-size: 13px;
 
-    border-radius: 10px;
-
-    text-align: center;
-
-    font-weight: 700;
-}}
+    opacity: .72;
+}
 
 
-.alert.normal {{
+/* CURRENT DATA */
+
+.current-data {
+
+    background: #FAFAF9;
+
+    padding: 28px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+}
+
+
+.data-label {
+
+    color: #81777A;
+
+    font-size: 13px;
+
+    margin-bottom: 7px;
+}
+
+
+.pressure-main {
+
+    font-size: 42px;
+
+    font-weight: 500;
+
+    color: #303033;
+
+    line-height: 1;
+}
+
+
+.pressure-main small {
+
+    font-size: 14px;
+
+    font-weight: 400;
+}
+
+
+.pressure-second {
+
+    color: #81777A;
+
+    font-size: 15px;
+
+    margin-top: 7px;
+}
+
+
+.data-divider {
+
+    height: 1px;
+
+    background: #E2DEDC;
+
+    margin: 20px 0;
+}
+
+
+.data-value {
+
+    font-size: 26px;
+
+    font-weight: 500;
+}
+
+
+.data-value small {
+
+    font-size: 14px;
+
+    color: #81777A;
+}
+
+
+.current-status {
+
+    margin-top: 18px;
+
+    padding: 8px 12px;
+
+    border-radius: 999px;
+
+    width: fit-content;
+
+    font-size: 13px;
+}
+
+
+.current-status.normal {
 
     background: #F5E8EC;
 
     color: #704252;
-}}
+}
 
 
-.alert.warning {{
+.current-status.warning {
 
     background: #F4E9C8;
 
     color: #79651A;
-}}
+}
 
 
-.alert.danger {{
+.current-status.danger {
 
     background: #F4DEDF;
 
     color: #8E3038;
-}}
+}
 
 
 /* =========================
-   24時間エリア
-   ========================= */
+   24 HOURS
+========================= */
 
-.section-title {{
-
-    font-size: 22px;
-
-    font-weight: 700;
-
-    color: #704252;
-
-    margin:
-        0
-        0
-        14px
-        4px;
-}}
-
-
-.forecast-grid {{
+.forecast-section {
 
     background: #E7E3E2;
 
-    border-radius: 20px;
+    border-radius: 26px;
 
-    padding: 18px;
+    padding: 30px;
+
+}
+
+
+.section-header {
+
+    display: flex;
+
+    align-items: baseline;
+
+    justify-content: space-between;
+
+    margin-bottom: 24px;
+}
+
+
+.section-title {
+
+    margin: 0;
+
+    font-size: 21px;
+
+    font-weight: 600;
+
+    color: #704252;
+
+    letter-spacing: .03em;
+}
+
+
+.section-sub {
+
+    color: #81777A;
+
+    font-size: 12px;
+}
+
+
+/* GRID */
+
+.forecast-grid {
 
     display: grid;
 
     grid-template-columns:
-        repeat(
-            6,
-            minmax(0, 1fr)
-        );
+        repeat(6, minmax(0, 1fr));
 
-    gap: 12px;
-}}
+    gap: 14px;
+}
 
 
-/* =========================
-   予報カード
-   ========================= */
+/* CARD */
 
-.forecast-card {{
+.forecast-card {
 
     background: #FAFAF9;
 
-    border-radius: 14px;
+    border-radius: 18px;
 
-    padding:
-        15px
-        13px;
-
-    box-shadow:
-        0 2px 8px rgba(
-            48,
-            48,
-            51,
-            0.07
-        );
+    padding: 18px;
 
     min-width: 0;
 
-    border:
-        1px solid #DDD8D6;
-}}
+    border: 1px solid #DDD8D6;
+
+    transition:
+        transform .2s ease,
+        box-shadow .2s ease;
+
+}
 
 
-.forecast-time {{
+.forecast-card:hover {
 
-    font-size: 15px;
+    transform: translateY(-2px);
 
-    font-weight: 700;
-
-    text-align: center;
-
-    color: #704252;
-
-    margin-bottom: 10px;
-}}
+    box-shadow:
+        0 10px 25px
+        rgba(48,48,51,.08);
+}
 
 
-.forecast-weather {{
-
-    text-align: center;
-
-    font-size: 17px;
-
-    font-weight: 700;
-
-    min-height: 45px;
+.forecast-top {
 
     display: flex;
 
     align-items: center;
-
-    justify-content: center;
-
-    margin-bottom: 8px;
-}}
-
-
-.forecast-row {{
-
-    display: flex;
 
     justify-content: space-between;
 
-    align-items: center;
+    gap: 8px;
 
-    gap: 5px;
-
-    font-size: 13px;
-
-    padding: 5px 0;
-
-    border-top:
-        1px solid #E2DEDC;
-}}
+    margin-bottom: 16px;
+}
 
 
-.forecast-row strong {{
+.forecast-time {
 
-    font-size: 14px;
-
-    color: #303033;
-}}
-
-
-.small-row {{
-
-    color: #81777A;
-
-    font-size: 12px;
-}}
-
-
-.forecast-pressure {{
-
-    border-top:
-        1px solid #E2DEDC;
-
-    margin-top: 3px;
-
-    padding-top: 7px;
-
-    text-align: center;
+    color: #704252;
 
     font-size: 12px;
 
-    color: #81777A;
-}}
+    font-weight: 600;
+}
 
 
-.forecast-pressure strong {{
+.forecast-status {
 
-    display: block;
+    font-size: 10px;
 
-    font-size: 16px;
+    padding: 4px 7px;
 
-    color: #303033;
+    border-radius: 999px;
 
-    margin-top: 2px;
-}}
-
-
-.forecast-pressure span {{
-
-    display: block;
-
-    font-size: 12px;
-
-    color: #81777A;
-
-    margin-top: 2px;
-}}
+    white-space: nowrap;
+}
 
 
-/* =========================
-   ステータス
-   ========================= */
-
-.forecast-status {{
-
-    margin-top: 8px;
-
-    padding: 5px;
-
-    border-radius: 7px;
-
-    text-align: center;
-
-    font-size: 11px;
-
-    font-weight: 700;
-}}
-
-
-.forecast-status.normal {{
+.forecast-status.normal {
 
     background: #F5E8EC;
 
     color: #704252;
-}}
+}
 
 
-.forecast-status.warning {{
+.forecast-status.warning {
 
     background: #F4E9C8;
 
     color: #79651A;
-}}
+}
 
 
-.forecast-status.danger {{
+.forecast-status.danger {
 
     background: #F4DEDF;
 
     color: #8E3038;
-}}
+}
+
+
+.forecast-weather {
+
+    font-size: 15px;
+
+    min-height: 23px;
+
+    margin-bottom: 5px;
+}
+
+
+.temperature {
+
+    font-size: 34px;
+
+    font-weight: 400;
+
+    letter-spacing: -.03em;
+
+    margin-bottom: 15px;
+}
+
+
+.temperature small {
+
+    font-size: 14px;
+
+    color: #81777A;
+}
+
+
+.details {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 5px;
+
+    border-top: 1px solid #E2DEDC;
+
+    border-bottom: 1px solid #E2DEDC;
+
+    padding: 12px 0;
+
+}
+
+
+.details div {
+
+    min-width: 0;
+}
+
+
+.details span {
+
+    display: block;
+
+    font-size: 10px;
+
+    color: #81777A;
+
+    margin-bottom: 4px;
+}
+
+
+.details strong {
+
+    display: block;
+
+    font-size: 13px;
+
+    font-weight: 500;
+}
+
+
+.pressure {
+
+    padding-top: 13px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 3px;
+}
+
+
+.pressure span {
+
+    font-size: 10px;
+
+    color: #81777A;
+}
+
+
+.pressure strong {
+
+    font-size: 19px;
+
+    font-weight: 500;
+}
+
+
+.pressure strong small {
+
+    font-size: 10px;
+
+    font-weight: 400;
+}
+
+
+.pressure em {
+
+    font-size: 12px;
+
+    font-style: normal;
+
+    color: #81777A;
+}
 
 
 /* =========================
-   タブレット
-   ========================= */
+   TABLET
+========================= */
 
-@media (max-width: 1100px) {{
+@media (max-width: 1100px) {
 
-    .forecast-grid {{
-
-        grid-template-columns:
-            repeat(
-                4,
-                minmax(0, 1fr)
-            );
-    }}
-
-    .current-grid {{
-
-        grid-template-columns:
-            repeat(3, 1fr);
-    }}
-
-}}
-
-
-/* =========================
-   スマホ
-   ========================= */
-
-@media (max-width: 700px) {{
-
-    .container {{
-
-        padding:
-            10px
-            10px
-            25px;
-    }}
-
-
-    .current-box {{
-
-        padding: 12px;
-
-        border-radius: 15px;
-
-        margin-bottom: 18px;
-    }}
-
-
-    .current-grid {{
+    .current {
 
         grid-template-columns:
             repeat(2, 1fr);
+    }
 
-        gap: 8px;
-    }}
+    .current-main {
 
+        grid-row: span 2;
+    }
 
-    .current-item {{
-
-        min-height: 88px;
-
-        padding:
-            10px
-            6px;
-
-        border-radius: 11px;
-    }}
-
-
-    .current-item.main-pressure {{
-
-        grid-column:
-            span 2;
-    }}
-
-
-    .label {{
-
-        font-size: 12px;
-
-        margin-bottom: 4px;
-    }}
-
-
-    .current-val {{
-
-        font-size: 21px;
-    }}
-
-
-    .small-current {{
-
-        font-size: 13px;
-    }}
-
-
-    .weather-current {{
-
-        font-size: 17px;
-    }}
-
-
-    .alert {{
-
-        margin-top: 10px;
-
-        padding: 9px;
-
-        font-size: 13px;
-    }}
-
-
-    /* 24時間 */
-
-    .section-title {{
-
-        font-size: 18px;
-
-        margin:
-            0
-            0
-            10px
-            2px;
-    }}
-
-
-    .forecast-grid {{
-
-        padding: 10px;
-
-        border-radius: 15px;
-
-        display: grid;
-
-        grid-template-columns: 1fr;
-
-        gap: 8px;
-    }}
-
-
-    .forecast-card {{
-
-        padding: 12px;
-
-        border-radius: 12px;
-
-        display: grid;
+    .forecast-grid {
 
         grid-template-columns:
-            90px
-            1fr
-            1.2fr;
-
-        column-gap: 10px;
-
-        align-items: center;
-    }}
-
-
-    .forecast-time {{
-
-        grid-row:
-            span 4;
-
-        font-size: 15px;
-
-        margin: 0;
-
-        text-align: center;
-    }}
-
-
-    .forecast-weather {{
-
-        grid-column:
-            2 / 4;
-
-        min-height: auto;
-
-        justify-content: flex-start;
-
-        text-align: left;
-
-        font-size: 15px;
-
-        margin-bottom: 3px;
-    }}
-
-
-    .forecast-row {{
-
-        padding: 3px 0;
-
-        border-top: none;
-
-        font-size: 12px;
-    }}
-
-
-    .forecast-row strong {{
-
-        font-size: 13px;
-    }}
-
-
-    .small-row {{
-
-        display: none;
-    }}
-
-
-    .forecast-pressure {{
-
-        grid-column:
-            2 / 4;
-
-        text-align: left;
-
-        border-top:
-            1px solid #E2DEDC;
-
-        margin-top: 3px;
-
-        padding-top: 5px;
-    }}
-
-
-    .forecast-pressure strong {{
-
-        display: inline;
-
-        font-size: 14px;
-
-        margin-right: 5px;
-    }}
-
-
-    .forecast-pressure span {{
-
-        display: inline;
-
-        font-size: 11px;
-    }}
-
-
-    .forecast-status {{
-
-        grid-column:
-            2 / 4;
-
-        margin-top: 3px;
-
-        padding: 4px;
-
-        font-size: 10px;
-    }}
-
-}}
+            repeat(4, minmax(0, 1fr));
+    }
+}
 
 
 /* =========================
-   小さいスマホ
-   ========================= */
+   MOBILE
+========================= */
 
-@media (max-width: 380px) {{
+@media (max-width: 700px) {
 
-    .container {{
+    .container {
 
-        padding-left: 7px;
+        width: calc(100% - 24px);
 
-        padding-right: 7px;
-    }}
-
-
-    .current-box {{
-
-        padding: 8px;
-    }}
+        padding-top: 12px;
+    }
 
 
-    .current-val {{
+    .current {
 
-        font-size: 19px;
-    }}
+        grid-template-columns: 1fr;
 
+        border-radius: 20px;
 
-    .forecast-card {{
-
-        grid-template-columns:
-            72px
-            1fr
-            1fr;
-
-        column-gap: 7px;
-
-        padding: 10px;
-    }}
+        margin-bottom: 24px;
+    }
 
 
-    .forecast-time {{
+    .current-main {
 
-        font-size: 13px;
-    }}
+        padding: 28px 24px;
+    }
 
-}}
+
+    .current-temp {
+
+        font-size: 58px;
+    }
+
+
+    .current-data {
+
+        padding: 23px 24px;
+    }
+
+
+    .forecast-section {
+
+        padding: 18px;
+
+        border-radius: 20px;
+    }
+
+
+    .section-header {
+
+        margin-bottom: 18px;
+
+        display: block;
+    }
+
+
+    .section-sub {
+
+        display: block;
+
+        margin-top: 5px;
+    }
+
+
+    .forecast-grid {
+
+        grid-template-columns: 1fr;
+
+        gap: 10px;
+    }
+
+
+    .forecast-card {
+
+        padding: 16px;
+    }
+
+
+    .forecast-top {
+
+        margin-bottom: 10px;
+    }
+
+
+    .forecast-weather {
+
+        margin-bottom: 3px;
+    }
+
+
+    .temperature {
+
+        font-size: 30px;
+
+        margin-bottom: 10px;
+    }
+
+
+    .details {
+
+        padding: 9px 0;
+    }
+
+
+    .pressure {
+
+        padding-top: 10px;
+    }
+
+}
+
+
+/* =========================
+   SMALL MOBILE
+========================= */
+
+@media (max-width: 380px) {
+
+    .container {
+
+        width: calc(100% - 16px);
+    }
+
+    .current-main {
+
+        padding: 24px 20px;
+    }
+
+    .current-data {
+
+        padding: 20px;
+    }
+
+    .forecast-section {
+
+        padding: 14px;
+    }
+
+}
 
 </style>
 
@@ -1086,147 +1006,157 @@ body {{
 
 <body>
 
-
-<div class="container">
-
-
-    <!-- 現在の状況 -->
-
-    <div class="current-box">
-
-        <div class="current-grid">
+<main class="container">
 
 
-            <div class="current-item main-pressure">
+    <!-- CURRENT -->
 
-                <div class="label">
-                    気圧
-                </div>
+    <section class="current">
 
-                <div class="current-val">
 
-                    {current_press:.1f} hPa
+        <div class="current-main">
 
-                    <br>
-
-                    <span class="small-current">
-
-                        {current_msl_press:.1f} hPa
-
-                    </span>
-
-                </div>
-
+            <div class="current-label">
+                伊豆熱川
             </div>
 
-
-            <div class="current-item">
-
-                <div class="label">
-                    天気
-                </div>
-
-                <div class="weather-current">
-                    {current_weather}
-                </div>
-
+            <div class="current-weather">
+                {current_weather}
             </div>
 
-
-            <div class="current-item">
-
-                <div class="label">
-                    気温
-                </div>
-
-                <div class="current-val">
-                    {current_temp:.1f}℃
-                </div>
-
+            <div class="current-temp">
+                {current_temp:.1f}
+                <small>℃</small>
             </div>
 
-
-            <div class="current-item">
-
-                <div class="label">
-                    湿度
-                </div>
-
-                <div class="current-val">
-                    {current_humidity:.0f}%
-                </div>
-
+            <div class="current-place">
+                標高約500m
             </div>
-
-
-            <div class="current-item">
-
-                <div class="label">
-                    降水量
-                </div>
-
-                <div class="current-val">
-                    {current_precip:.1f} mm
-                </div>
-
-            </div>
-
 
         </div>
 
 
-        <div class="alert {status_class}">
+        <div class="current-data">
 
-            {status_text}
+            <div class="data-label">
+                気圧
+            </div>
+
+            <div class="pressure-main">
+                {current_surface:.1f}
+                <small>hPa</small>
+            </div>
+
+            <div class="pressure-second">
+                {current_msl:.1f} hPa
+            </div>
+
+            <div class="current-status {status_class}">
+                {status_text}
+            </div>
 
         </div>
 
 
-    </div>
+        <div class="current-data">
+
+            <div class="data-label">
+                湿度
+            </div>
+
+            <div class="data-value">
+                {current_humidity:.0f}
+                <small>%</small>
+            </div>
+
+            <div class="data-divider"></div>
+
+            <div class="data-label">
+                降水
+            </div>
+
+            <div class="data-value">
+                {current_precip:.1f}
+                <small>mm</small>
+            </div>
+
+        </div>
 
 
-    <!-- 24時間予報 -->
+        <div class="current-data">
 
-    <div class="section-title">
+            <div class="data-label">
+                麓との気温差
+            </div>
 
-        今後24時間の予報
+            <div class="data-value">
+                {(
+                    current_temp
+                    - float(coast.iloc[0]["Temp"])
+                ):+.1f}
+                <small>℃</small>
+            </div>
 
-    </div>
+            <div class="data-divider"></div>
+
+            <div class="data-label">
+                今日の空
+            </div>
+
+            <div class="data-value">
+                {current_weather.split(" ", 1)[0]}
+            </div>
+
+        </div>
 
 
-    <div class="forecast-grid">
-
-        {forecast_cards}
-
-    </div>
+    </section>
 
 
-</div>
+    <!-- 24 HOURS -->
 
+    <section class="forecast-section">
+
+
+        <div class="section-header">
+
+            <h2 class="section-title">
+                今後24時間
+            </h2>
+
+            <span class="section-sub">
+                標高約500mの予報
+            </span>
+
+        </div>
+
+
+        <div class="forecast-grid">
+
+            {forecast_cards}
+
+        </div>
+
+
+    </section>
+
+
+</main>
 
 </body>
 
 </html>
-
 """
 
         return html
 
-
     except Exception as e:
 
         return f"""
-
         <h2>データ取得エラー</h2>
-
         <p>{str(e)}</p>
-
         """
 
-
-# =========================
-# Render
-# =========================
 
 if __name__ == "__main__":
 
