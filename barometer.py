@@ -2090,6 +2090,13 @@ body {
 
     letter-spacing: .05em;
 }
+.header-row > div:nth-child(3),
+.header-row > div:nth-child(4),
+.header-row > div:nth-child(5),
+.header-row > div:nth-child(6),
+.header-row > div:nth-child(7) {
+    text-align: center;
+}
 
 .header-row > div:nth-child(1) {
     text-align: left;
