@@ -2277,12 +2277,14 @@ body {
 }
 
 .hour-pressure {
-    text-align: right;
-    color: #aaa1a3;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
     white-space: nowrap;
+    color: #aaa1a3;
     line-height: 1.2;
 }
-
 .travel-status {
     text-align: center;
     font-size: 11px;
@@ -3514,36 +3516,29 @@ body {
             </div>
 
 
-            <div class="hour-pressure">
+<div class="hour-pressure">
 
-                {% if item.surface_pressure is not none %}
+    {% if item.surface_pressure is not none %}
 
-                    {{ "%.1f"|format(item.surface_pressure) }}
+        {{ "%.1f"|format(item.surface_pressure) }}
 
-                    {% if item.pressure_level == "strong-fall" %}
-                        <br>
-                        <span class="health-attention">
-                            ↓ 急低下
-                        </span>
-                    {% elif item.pressure_level == "fall" %}
-                        <br>
-                        ↓ 低下
-                    {% elif item.pressure_level == "strong-rise" %}
-                        <br>
-                        ↑ 急上昇
-                    {% elif item.pressure_level == "rise" %}
-                        <br>
-                        ↑ 上昇
-                    {% endif %}
+        {% if item.pressure_level == "strong-fall" %}
+            <span class="health-attention"> ↓ 急低下</span>
+        {% elif item.pressure_level == "fall" %}
+            <span> ↓ 低下</span>
+        {% elif item.pressure_level == "strong-rise" %}
+            <span> ↑ 急上昇</span>
+        {% elif item.pressure_level == "rise" %}
+            <span> ↑ 上昇</span>
+        {% endif %}
 
-                {% else %}
+    {% else %}
 
-                    —
+        —
 
-                {% endif %}
+    {% endif %}
 
-            </div>
-
+</div>
 
             <div>
 
