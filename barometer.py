@@ -1943,14 +1943,11 @@ body {
 }
 
 .note {
-
     color: #81797b;
-
     font-size: 11px;
-
-    margin-top: 12px;
-
-    line-height: 1.7;
+    margin-top: 6px;
+    margin-bottom: 10px;
+    line-height: 1.5;
 }
 
 .observation {
