@@ -2176,7 +2176,7 @@ body {
 
 .hour-row {
     display: grid;
-    grid-template-columns: 65px 135px 180px 65px 75px 80px 80px;
+    grid-template-columns: 65px 135px 180px 65px 75px 80px 80px !important;
     align-items: center;
     min-height: 58px;
     border-bottom: 1px solid #302a2c;
