@@ -1191,6 +1191,137 @@ def weather_display(item):
 
     return weather
 
+# ============================================================
+# 状況表示
+# ============================================================
+
+def situation_display(item):
+
+    situations = []
+
+    rain = item.get("precipitation")
+    thunder = item.get("thunder_probability")
+    wind = item.get("wind")
+    humidity = item.get("humidity")
+    cloud = item.get("cloud_area_fraction")
+
+    weather = item.get(
+        "weather",
+        ""
+    ) or ""
+
+    symbol = (
+        item.get("symbol")
+        or ""
+    ).lower()
+
+    fog_level = fog_visibility_level(item)
+
+    # --------------------------------------------------------
+    # 雷
+    # --------------------------------------------------------
+
+    thunder_risk = (
+        (
+            thunder is not None
+            and thunder >= 30
+        )
+        or "雷" in weather
+        or "thunder" in symbol
+    )
+
+    if thunder_risk:
+        situations.append("⚡ 雷に注意")
+
+
+    # --------------------------------------------------------
+    # 強い雨
+    # --------------------------------------------------------
+
+    if rain is not None:
+
+        if rain >= 5:
+            situations.append("🌧️ 強い雨")
+
+        elif rain >= 1:
+            situations.append("🌧️ 雨")
+
+
+    # --------------------------------------------------------
+    # 霧・視界
+    # --------------------------------------------------------
+
+    if fog_level == "strong":
+
+        situations.append(
+            "🌫️ 霧・視界不良"
+        )
+
+    elif fog_level == "attention":
+
+        situations.append(
+            "🌫️ 霧・低い雲に注意"
+        )
+
+
+    # --------------------------------------------------------
+    # 強風
+    # --------------------------------------------------------
+
+    if wind is not None:
+
+        if wind >= 10:
+            situations.append(
+                "💨 強風"
+            )
+
+        elif wind >= 7:
+            situations.append(
+                "💨 風に注意"
+            )
+
+
+    # --------------------------------------------------------
+    # 高湿度＋雲
+    # 山間部で雲に包まれる可能性
+    # --------------------------------------------------------
+
+    if (
+        humidity is not None
+        and humidity >= 90
+        and cloud is not None
+        and cloud >= 90
+        and fog_level == "normal"
+    ):
+
+        situations.append(
+            "☁️ 低い雲に注意"
+        )
+
+
+    # --------------------------------------------------------
+    # 降水なし・特に注意なし
+    # --------------------------------------------------------
+
+    if not situations:
+
+        if (
+            cloud is not None
+            and cloud >= 80
+        ):
+            situations.append(
+                "☁️ 雲が多い"
+            )
+
+        else:
+            situations.append(
+                "✓ 大きな注意なし"
+            )
+
+
+    return "・".join(
+        situations
+    )
 
 # ============================================================
 # 体調注意時間
@@ -2036,33 +2167,29 @@ body {
 }
 
 
+
 /* =========================================================
    1時間ごとの天気
    ========================================================= */
 
 .hourly {
-
+    width: 100%;
     border-top: 1px solid #393234;
-
     border-bottom: 1px solid #393234;
-
     overflow: hidden;
 }
 
 .hour-row {
-
     display: grid;
 
     grid-template-columns:
-        64px
-        54px
-        112px
-        70px
+        90px
         80px
-        86px
-        105px;
-
-    justify-content: start;
+        1fr
+        95px
+        105px
+        115px
+        120px;
 
     align-items: center;
 
@@ -2081,8 +2208,10 @@ body {
     border-bottom: 0;
 }
 
-.hour-row.header-row {
 
+/* ヘッダー */
+
+.hour-row.header-row {
     min-height: 42px;
 
     color: #81797b;
@@ -2092,39 +2221,82 @@ body {
     letter-spacing: .05em;
 }
 
+
+/* 時間 */
+
+.header-row > div:nth-child(1) {
+    text-align: left;
+    padding-left: 8px;
+}
+
+
+/* 天気 */
+
+.header-row > div:nth-child(2) {
+    text-align: center;
+}
+
+
+/* 状況 */
+
+.header-row > div:nth-child(3) {
+    text-align: center;
+}
+
+
+/* 気温・降水量・気圧・麓への移動 */
+
+.header-row > div:nth-child(4),
+.header-row > div:nth-child(5),
+.header-row > div:nth-child(6),
+.header-row > div:nth-child(7) {
+    text-align: center;
+}
+
+
+/* データ */
+
 .hour-time {
-
     font-size: 15px;
-
     color: #d6ced0;
+    white-space: nowrap;
 }
 
 .hour-icon {
-
     font-size: 23px;
-
     text-align: center;
 }
 
 .hour-weather {
     color: #d4cccd;
+    text-align: center;
+}
+.hour-situation {
+    text-align: center;
+    padding-left: 0;
 }
 
 .hour-temp {
-    text-align: right;
+    text-align: center;
 }
 
 .hour-rain {
-    text-align: right;
+    text-align: center;
 }
 
 .hour-pressure {
-    text-align: right;
+    text-align: center;
     color: #aaa1a3;
 }
 
-.travel-status {
 
+/* 麓への移動 */
+
+.hour-row > div:last-child {
+    text-align: center;
+}
+
+.travel-status {
     text-align: center;
 
     font-size: 11px;
@@ -2135,7 +2307,6 @@ body {
 }
 
 .travel-good {
-
     color: #a9b0a8;
 
     background: rgba(
@@ -2147,7 +2318,6 @@ body {
 }
 
 .travel-attention {
-
     color: #d0a995;
 
     background: rgba(
@@ -2159,7 +2329,6 @@ body {
 }
 
 .travel-danger {
-
     color: #e0a3a9;
 
     background: rgba(
@@ -2173,14 +2342,12 @@ body {
 }
 
 .health-attention {
-
     color: #e0a3a9;
 
     font-weight: 600;
 }
 
 .row-attention {
-
     background:
         linear-gradient(
             90deg,
@@ -2190,7 +2357,6 @@ body {
 }
 
 .row-danger {
-
     background:
         linear-gradient(
             90deg,
@@ -2204,239 +2370,83 @@ body {
 
 
 /* =========================================================
-   🐕 いよかん生活ガイド
+   グラフ
    ========================================================= */
-
-.dog-guide-card {
-    background: linear-gradient(145deg, #242021 0%, #1d1a1b 100%);
-    border: 1px solid #3a3335;
-    border-radius: 18px;
-    padding: 16px;
-    box-shadow: 0 14px 35px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.025);
-}
-
-.dog-guide-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 9px;
-}
-
-.dog-guide-item {
-    background: #191718;
-    border: 1px solid #302a2c;
-    border-radius: 11px;
-    padding: 13px 8px;
-    text-align: center;
-}
-
-.dog-guide-icon {
-    font-size: 22px;
-    line-height: 1.2;
-    margin-bottom: 6px;
-}
-
-.dog-guide-label {
-    color: #8f8789;
-    font-size: 10px;
-    margin-bottom: 6px;
-}
-
-.dog-guide-value {
-    color: #eee8e8;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.45;
-}
-
-.dog-guide-details {
-    margin-top: 12px;
-    border-top: 1px solid #302a2c;
-}
-
-.dog-guide-detail {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 14px;
-    padding: 9px 3px;
-    border-bottom: 1px solid #302a2c;
-    font-size: 11px;
-}
-
-.dog-guide-detail span {
-    color: #8f8789;
-    white-space: nowrap;
-}
-
-.dog-guide-detail strong {
-    color: #ddd5d7;
-    font-weight: 500;
-    text-align: right;
-}
-
-.dog-guide-note {
-    margin-top: 10px;
-    color: #70696b;
-    font-size: 10px;
-    line-height: 1.7;
-}
-
-@media (max-width: 800px) {
-    .dog-guide-card {
-        padding: 12px;
-        border-radius: 15px;
-    }
-
-    .dog-guide-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-    }
-
-    .dog-guide-item {
-        padding: 11px 7px;
-    }
-
-    .dog-guide-detail {
-        font-size: 10px;
-        gap: 8px;
-    }
-}
-
-
-/* =========================================================
-   グラフ｜落ち着いた山の天気ダッシュボード
-   ========================================================= */
-
-.chart-card {
-    background: linear-gradient(145deg, #242021 0%, #1d1a1b 100%);
-    border: 1px solid #3a3335;
-    border-radius: 18px;
-    padding: 18px 18px 16px;
-    box-shadow: 0 14px 35px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.025);
-}
-
-.chart-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 12px;
-}
-
-.chart-kicker {
-    color: #8f8587;
-    font-size: 10px;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-.chart-name {
-    color: #eee8e8;
-    font-size: 16px;
-    font-weight: 500;
-    letter-spacing: .04em;
-}
-
-.chart-note {
-    color: #8f8587;
-    font-size: 10px;
-    line-height: 1.6;
-    text-align: right;
-}
 
 .chart-box {
-    position: relative;
-    background: #191718;
-    border: 1px solid #302a2c;
-    border-radius: 13px;
-    padding: 8px 10px 4px;
-    height: 405px;
-    overflow: hidden;
+
+    background: #211d1e;
+
+    border: 1px solid #332d2f;
+
+    border-radius: 12px;
+
+    padding: 14px 16px 12px;
+
+    height: 420px;
+
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
 }
 
 .chart-box.pressure-chart-box {
-    height: 410px;
-}
-
-.chart-box canvas {
-    width: 100% !important;
-    height: 100% !important;
-}
-
-.pressure-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin-top: 10px;
-}
-
-.pressure-summary-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 9px;
-    border-radius: 999px;
-    background: #211d1e;
-    border: 1px solid #393234;
-    color: #aaa1a3;
-    font-size: 10px;
-}
-
-.pressure-summary-chip strong {
-    color: #e4dddd;
-    font-weight: 500;
+    height: 440px;
 }
 
 .pressure-alerts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 8px;
     margin-top: 10px;
 }
 
 .pressure-alert {
-    padding: 9px 11px;
-    border-radius: 11px;
-    border: 1px solid #383133;
-    background: #201c1d;
-    font-size: 11px;
-    line-height: 1.55;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid #3b3436;
+    background: #1d191a;
+    font-size: 12px;
+    line-height: 1.6;
 }
 
 .pressure-alert.strong {
-    border-color: #704b52;
-    background: rgba(180,70,85,.08);
+    border-color: #85545d;
+    background: rgba(180,70,85,.10);
 }
 
 .pressure-alert.attention {
-    border-color: #51474a;
-    background: rgba(150,100,110,.045);
+    border-color: #695358;
+    background: rgba(150,100,110,.07);
 }
 
 .pressure-alert-title {
     font-weight: 600;
-    color: #ddd5d6;
-    margin-bottom: 1px;
+    margin-bottom: 2px;
 }
 
 .pressure-alert-detail {
-    color: #91888a;
+    color: #aaa1a3;
 }
 
-.chart-explanation {
-    margin-top: 9px;
-    color: #81797b;
-    font-size: 10px;
-    line-height: 1.7;
+.chart-subtitle {
+    margin: -5px 0 10px;
+    color: #8d8587;
+    font-size: 11px;
+}
+
+.chart-box canvas {
+
+    width: 100% !important;
+
+    height: 100% !important;
 }
 
 .temperature-legend {
+
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: 10px 14px;
     margin-top: 10px;
-    color: #8e8587;
+    color: #91888a;
     font-size: 10px;
 }
 
@@ -2448,8 +2458,8 @@ body {
 
 .temp-dot {
     display: inline-block;
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
 }
 
@@ -2463,30 +2473,83 @@ body {
 .temp-extreme { background: #d96b6b; }
 .temp-danger { background: #a93643; }
 
+
+.chart-explanation {
+
+    margin-top: 10px;
+
+    color: #81797b;
+
+    font-size: 11px;
+
+    line-height: 1.7;
+}
+
 .legend-note {
+
     display: flex;
-    gap: 14px;
+
+    gap: 18px;
+
     flex-wrap: wrap;
-    margin-top: 9px;
-    color: #8d8587;
-    font-size: 10px;
+
+    margin-top: 10px;
+
+    color: #91888a;
+
+    font-size: 11px;
 }
 
 .legend-item {
+
     display: flex;
+
     align-items: center;
+
     gap: 6px;
 }
 
 .legend-dot {
-    width: 7px;
-    height: 7px;
+
+    width: 9px;
+
+    height: 9px;
+
     border-radius: 50%;
+
     background: #8d6b70;
 }
 
-.legend-dot.strong { background: #b87880; }
-.legend-dot.rise { background: #706e86; }
+.legend-dot.strong {
+    background: #b87880;
+}
+
+.legend-dot.rise {
+    background: #706e86;
+}
+
+.error {
+
+    color: #b8878d;
+
+    font-size: 12px;
+
+    padding: 10px 0;
+}
+
+.footer {
+
+    margin-top: 35px;
+
+    padding-top: 18px;
+
+    border-top: 1px solid #393234;
+
+    color: #70696b;
+
+    font-size: 11px;
+}
+
 
 /* =========================================================
    スマホ
@@ -2521,57 +2584,280 @@ body {
         min-width: 660px;
     }
 
-    .chart-card {
-        padding: 14px 12px 12px;
-    }
-
-    .chart-head {
-        align-items: flex-start;
-    }
-
-    .chart-note {
-        display: none;
-    }
-
     .chart-box {
-        height: 380px;
-        padding: 6px 6px 2px;
+
+        height: 390px;
+
+        padding: 10px;
     }
 
     .chart-box.pressure-chart-box {
-        height: 385px;
+        height: 410px;
     }
 }
+/* =========================================================
+24時間 天気グラフ
+========================================================= */
 
+.weather-chart-card {
+
+```
+background: #211d1e;
+
+border: 1px solid #332d2f;
+
+border-radius: 12px;
+
+padding: 18px 18px 20px;
+
+box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.02);
+```
+
+}
+
+.weather-chart-header {
+
+```
+display: flex;
+
+align-items: center;
+
+margin-bottom: 18px;
+```
+
+}
+
+.weather-chart-kicker {
+
+```
+color: #81797b;
+
+font-size: 10px;
+
+letter-spacing: .16em;
+
+margin-bottom: 5px;
+```
+
+}
+
+.weather-chart-name {
+
+```
+color: #eee8e8;
+
+font-size: 17px;
+
+letter-spacing: .06em;
+```
+
+}
 
 /* =========================================================
-   24時間天気グラフ｜天気・気温・降水量を分離
-   ========================================================= */
-.weather-chart-card {
-    background: linear-gradient(145deg, #242021 0%, #1d1a1b 100%);
-    border: 1px solid #3a3335;
-    border-radius: 18px;
-    padding: 18px 18px 20px;
-    box-shadow: 0 14px 35px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.025);
-    overflow-x: auto;
+天気タイムライン
+========================================================= */
+
+.weather-timeline {
+
+```
+display: grid;
+
+grid-template-columns:
+    repeat(24, minmax(52px, 1fr));
+
+min-width: 1248px;
+
+border-top: 1px solid #393234;
+
+border-bottom: 1px solid #393234;
+
+padding: 12px 0 14px;
+
+margin-bottom: 18px;
+```
+
 }
-.weather-chart-scroll { width: 100%; overflow-x: auto; scrollbar-width: thin; }
-.weather-chart-inner { min-width: 900px; }
-.weather-chart-kicker { color:#8f8587; font-size:10px; letter-spacing:.16em; text-transform:uppercase; margin-bottom:4px; }
-.weather-chart-name { color:#eee8e8; font-size:16px; font-weight:500; letter-spacing:.04em; margin-bottom:14px; }
-.weather-timeline { display:grid; grid-template-columns:repeat(24,minmax(37px,1fr)); border-bottom:1px solid #363032; padding-bottom:14px; }
-.weather-time-item { text-align:center; min-width:0; }
-.weather-time { color:#92898b; font-size:11px; margin-bottom:7px; }
-.weather-icon-large { font-size:25px; line-height:1.2; height:32px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.25)); }
-.weather-chart-title { display:flex; align-items:center; gap:6px; margin:15px 0 5px 2px; color:#c8c0c2; font-size:12px; font-weight:600; }
-.rain-title { margin-top:17px; }
-.weather-chart-panel { position:relative; width:100%; }
-.temperature-panel { height:145px; }
-.rain-panel { height:115px; }
-.weather-chart-panel canvas { width:100% !important; height:100% !important; display:block; }
-.weather-chart-card::-webkit-scrollbar { height:6px; }
-.weather-chart-card::-webkit-scrollbar-track { background:#191617; border-radius:10px; }
-.weather-chart-card::-webkit-scrollbar-thumb { background:#4b4446; border-radius:10px; }
+
+.weather-time-item {
+
+```
+text-align: center;
+
+min-width: 0;
+```
+
+}
+
+.weather-time {
+
+```
+color: #91888a;
+
+font-size: 10px;
+
+margin-bottom: 8px;
+
+white-space: nowrap;
+```
+
+}
+
+.weather-icon-large {
+
+```
+font-size: 22px;
+
+line-height: 1.2;
+```
+
+}
+
+/* =========================================================
+グラフタイトル
+========================================================= */
+
+.weather-chart-title {
+
+```
+color: #aaa1a3;
+
+font-size: 12px;
+
+letter-spacing: .06em;
+
+margin: 12px 0 7px;
+```
+
+}
+
+.rain-title {
+
+```
+margin-top: 20px;
+```
+
+}
+
+/* =========================================================
+グラフ本体
+========================================================= */
+
+.weather-chart-panel {
+
+```
+position: relative;
+
+width: 100%;
+
+min-width: 1248px;
+```
+
+}
+
+.temperature-panel {
+
+```
+height: 180px;
+```
+
+}
+
+.rain-panel {
+
+```
+height: 125px;
+```
+
+}
+
+.weather-chart-panel canvas {
+
+```
+width: 100% !important;
+
+height: 100% !important;
+```
+
+}
+
+/* =========================================================
+横スクロール
+========================================================= */
+
+.weather-chart-card {
+
+```
+overflow-x: auto;
+```
+
+}
+
+.weather-chart-card::-webkit-scrollbar {
+
+```
+height: 7px;
+```
+
+}
+
+.weather-chart-card::-webkit-scrollbar-track {
+
+```
+background: #1b1819;
+```
+
+}
+
+.weather-chart-card::-webkit-scrollbar-thumb {
+
+```
+background: #51484a;
+
+border-radius: 999px;
+```
+
+}
+
+/* =========================================================
+スマホ
+========================================================= */
+
+@media (max-width: 800px) {
+
+```
+.weather-chart-card {
+
+    padding: 16px 12px 18px;
+
+}
+
+.weather-chart-panel {
+
+    min-width: 1248px;
+
+}
+
+.weather-timeline {
+
+    min-width: 1248px;
+
+}
+
+.temperature-panel {
+
+    height: 170px;
+
+}
+
+.rain-panel {
+
+    height: 115px;
+
+}
+```
+
+}
 
 </style>
 
@@ -3122,154 +3408,6 @@ body {
 
 
 <!-- ===================================================== -->
-<!-- 🐕 いよかん生活ガイド -->
-<!-- ===================================================== -->
-
-<section class="section">
-
-    <div class="section-title">
-        🐕 いよかん生活ガイド
-    </div>
-
-    <div class="dog-guide-card">
-
-        <div class="dog-guide-grid">
-
-            <div class="dog-guide-item">
-                <div class="dog-guide-icon">🏠</div>
-                <div class="dog-guide-label">自宅の散歩</div>
-                <div class="dog-guide-value">
-                    {% if dog_walk_danger_times %}
-                        🔴 注意時間あり
-                    {% elif dog_walk_attention_times %}
-                        🟠 注意時間あり
-                    {% else %}
-                        🟢 比較的OK
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="dog-guide-item">
-                <div class="dog-guide-icon">🌊</div>
-                <div class="dog-guide-label">麓の散歩</div>
-                <div class="dog-guide-value">
-                    {% if foothill_walk_danger_times %}
-                        🔴 注意時間あり
-                    {% elif foothill_walk_attention_times %}
-                        🟠 注意時間あり
-                    {% else %}
-                        🟢 比較的OK
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="dog-guide-item">
-                <div class="dog-guide-icon">🔥</div>
-                <div class="dog-guide-label">アスファルト</div>
-                <div class="dog-guide-value">
-                    {% if asphalt_ng_times %}
-                        🔴 NG時間あり
-                    {% else %}
-                        🟢 NGなし
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="dog-guide-item">
-                <div class="dog-guide-icon">❄️</div>
-                <div class="dog-guide-label">エアコン</div>
-                <div class="dog-guide-value">
-                    {% if aircon_times %}
-                        🟠 冷房推奨
-                    {% else %}
-                        🟢 基本不要
-                    {% endif %}
-                </div>
-            </div>
-
-        </div>
-
-        <div class="dog-guide-details">
-
-            <div class="dog-guide-detail">
-                <span>🐾 散歩OK</span>
-                <strong>
-                    {% if dog_walk_good_times %}
-                        {{ dog_walk_good_times | join("・") }}
-                    {% else %}
-                        なし
-                    {% endif %}
-                </strong>
-            </div>
-
-            <div class="dog-guide-detail">
-                <span>🟠 散歩注意</span>
-                <strong>
-                    {% if dog_walk_attention_times %}
-                        {{ dog_walk_attention_times | join("・") }}
-                    {% else %}
-                        なし
-                    {% endif %}
-                </strong>
-            </div>
-
-            <div class="dog-guide-detail">
-                <span>🔴 散歩NG</span>
-                <strong>
-                    {% if dog_walk_danger_times %}
-                        {{ dog_walk_danger_times | join("・") }}
-                    {% else %}
-                        なし
-                    {% endif %}
-                </strong>
-            </div>
-
-            <div class="dog-guide-detail">
-                <span>🌊 麓の散歩注意</span>
-                <strong>
-                    {% if foothill_walk_attention_times %}
-                        {{ foothill_walk_attention_times | join("・") }}
-                    {% else %}
-                        なし
-                    {% endif %}
-                </strong>
-            </div>
-
-            <div class="dog-guide-detail">
-                <span>🔥 アスファルトNG</span>
-                <strong>
-                    {% if asphalt_ng_times %}
-                        {{ asphalt_ng_times | join("・") }}
-                    {% else %}
-                        なし
-                    {% endif %}
-                </strong>
-            </div>
-
-            <div class="dog-guide-detail">
-                <span>❄️ 冷房推奨</span>
-                <strong>
-                    {% if aircon_range %}
-                        {{ aircon_range }}
-                    {% else %}
-                        なし
-                    {% endif %}
-                </strong>
-            </div>
-
-        </div>
-
-        <div class="dog-guide-note">
-            ※いよかん（犬）を基準にした目安です。気温だけでなく、雨・風・湿度も考慮しています。<br>
-            ※アスファルトは気温より高温になるため、暑い時間帯は肉球への負担に注意してください。
-        </div>
-
-    </div>
-
-</section>
-
-
-<!-- ===================================================== -->
 <!-- 24時間・1時間ごとの天気 -->
 <!-- ===================================================== -->
 
@@ -3313,31 +3451,42 @@ body {
         ">
 
 
-            <div class="hour-time">
+             <div class="hour-time">
                 {{ item.dt.strftime("%H:%M") }}
             </div>
 
 
-            <div class="hour-icon">
-                {{ item.icon }}
-            </div>
+<div class="hour-weather">
+
+    <span class="hour-icon">
+        {{ item.icon }}
+    </span>
+
+    <span class="weather-name">
+        {{ item.display_weather }}
+    </span>
+
+</div>
 
 
-            <div class="hour-weather">
+<div class="
+    hour-situation
+    {% if item.travel_level == 'danger' %}
+        danger
+    {% elif item.travel_level == 'attention'
+          or item.health_level != 'normal'
+          or item.fog_visibility_level != 'normal' %}
+        attention
+    {% endif %}
+">
 
-                {% if item.travel_level == "danger" %}
-                    <strong>⚠️</strong>
-                {% endif %}
+    {% if item.health_level == "strong" %}
+        🩺
+    {% endif %}
 
-                {% if item.health_level == "strong" %}
-                    <span class="health-attention">
-                        🩺
-                    </span>
-                {% endif %}
+    {{ item.situation }}
 
-                {{ item.display_weather }}
-
-            </div>
+</div>
 
 
             <div class="hour-temp">
@@ -3459,61 +3608,64 @@ body {
 
 
 <!-- ===================================================== -->
+
 <!-- 24時間 天気グラフ -->
+
 <!-- ===================================================== -->
 
 <section class="section">
 
-    <div class="section-title">
-        📈 24時間の天気
-    </div>
+```
+<div class="section-title">
+    📈 24時間の天気グラフ
+</div>
 
-    <div class="weather-chart-card">
+<div class="weather-chart-card">
 
-        <div class="weather-chart-scroll">
-            <div class="weather-chart-inner">
+    <div class="weather-chart-header">
+        <div>
+            <div class="weather-chart-kicker">
+                NEXT 24 HOURS
+            </div>
 
-                <div class="weather-chart-kicker">NEXT 24 HOURS</div>
-                <div class="weather-chart-name">天気の流れ</div>
-
-                <div class="weather-timeline" id="weatherTimeline"></div>
-
-                <div class="weather-chart-title">🌡️ 気温</div>
-                <div class="weather-chart-panel temperature-panel">
-                    <canvas id="temperatureChart"></canvas>
-                </div>
-
-                <div class="weather-chart-title rain-title">💧 降水量</div>
-                <div class="weather-chart-panel rain-panel">
-                    <canvas id="rainChart"></canvas>
-                </div>
-
+            <div class="weather-chart-name">
+                天気の流れ
             </div>
         </div>
-
     </div>
 
-    <div class="temperature-legend">
-        <span><i class="temp-dot temp-freeze"></i>0℃未満</span>
-        <span><i class="temp-dot temp-cold"></i>0〜4.9℃</span>
-        <span><i class="temp-dot temp-cool"></i>5〜9.9℃</span>
-        <span><i class="temp-dot temp-mild"></i>10〜14.9℃</span>
-        <span><i class="temp-dot temp-warm"></i>15〜19.9℃</span>
-        <span><i class="temp-dot temp-hot"></i>20〜24.9℃</span>
-        <span><i class="temp-dot temp-veryhot"></i>25〜29.9℃</span>
-        <span><i class="temp-dot temp-extreme"></i>30〜34.9℃</span>
-        <span><i class="temp-dot temp-danger"></i>35℃以上</span>
+    <!-- 天気 -->
+    <div class="weather-timeline" id="weatherTimeline"></div>
+
+    <!-- 気温 -->
+    <div class="weather-chart-title">
+        🌡️ 気温
     </div>
 
-    <div class="chart-explanation">
-
-        天気を上段、気温を中段、降水量を下段に分けて表示しています。<br>
-        時間ごとの天気の変化と雨の強さをひと目で確認できます。
-
+    <div class="weather-chart-panel temperature-panel">
+        <canvas id="temperatureChart"></canvas>
     </div>
+
+    <!-- 降水量 -->
+    <div class="weather-chart-title rain-title">
+        💧 降水量
+    </div>
+
+    <div class="weather-chart-panel rain-panel">
+        <canvas id="rainChart"></canvas>
+    </div>
+
+</div>
+
+<div class="chart-explanation">
+
+    天気の変化、気温、降水量を分けて表示しています。<br>
+    気温は温度帯によって色分けしています。
+
+</div>
+```
 
 </section>
-
 
 <!-- ===================================================== -->
 <!-- 24時間 気圧 -->
@@ -3525,22 +3677,14 @@ body {
         📉 24時間の気圧
     </div>
 
-    <div class="chart-card">
-        <div class="chart-head">
-            <div>
-                <div class="chart-kicker">BAROMETER TREND</div>
-                <div class="chart-name">気圧の流れ</div>
-            </div>
-            <div class="chart-note">線が上がる＝気圧上昇<br>線が下がる＝気圧低下</div>
-        </div>
-        <div class="chart-box pressure-chart-box">
-            <canvas id="pressureChart"></canvas>
-        </div>
-        <div class="pressure-summary">
-            <div class="pressure-summary-chip">● <strong>気圧</strong> 自宅標高補正</div>
-            <div class="pressure-summary-chip">↓ <strong>低下</strong> 3時間変化</div>
-            <div class="pressure-summary-chip">⚠ <strong>急変</strong> 要注意ポイント</div>
-        </div>
+    <div class="chart-subtitle">
+        線＝自宅地点の気圧　｜　棒＝直近3時間の気圧変化　｜　背景＝注意時間帯
+    </div>
+
+    <div class="chart-box pressure-chart-box">
+
+        <canvas id="pressureChart"></canvas>
+
     </div>
 
     <div id="pressureAlerts" class="pressure-alerts"></div>
@@ -3624,119 +3768,492 @@ const pressureChanges =
 
 const gridColor = "#302a2c";
 const textColor = "#8d8587";
-
 /* =========================================================
-   24時間 天気グラフ｜新デザイン
-   ========================================================= */
+24時間 天気グラフ
+========================================================= */
 
 function temperatureColor(value) {
-    if (value === null || value === undefined) return "#9a9294";
-    if (value < 0) return "#315f9e";
-    if (value < 5) return "#5c8fd8";
-    if (value < 10) return "#62b5d6";
-    if (value < 15) return "#65b99a";
-    if (value < 20) return "#9fbe68";
-    if (value < 25) return "#d7c45f";
-    if (value < 30) return "#df9a55";
-    if (value < 35) return "#d96b6b";
-    return "#a93643";
+
+```
+if (value === null || value === undefined) {
+    return "#9a9294";
 }
 
-const weatherTimeline = document.getElementById("weatherTimeline");
-forecastLabels.forEach((label, index) => {
-    const item = document.createElement("div");
-    item.className = "weather-time-item";
-    item.innerHTML = `<div class="weather-time">${label}</div><div class="weather-icon-large">${forecastIcons[index] || ""}</div>`;
-    weatherTimeline.appendChild(item);
-});
-
-function weatherTooltipTitle(items) {
-    const index = items[0]?.dataIndex ?? 0;
-    return `${forecastLabels[index]}  ${forecastIcons[index] || ""}`;
+if (value < 0) {
+    return "#315f9e";
 }
 
-new Chart(document.getElementById("temperatureChart"), {
+if (value < 5) {
+    return "#5c8fd8";
+}
+
+if (value < 10) {
+    return "#62b5d6";
+}
+
+if (value < 15) {
+    return "#65b99a";
+}
+
+if (value < 20) {
+    return "#9fbe68";
+}
+
+if (value < 25) {
+    return "#d7c45f";
+}
+
+if (value < 30) {
+    return "#df9a55";
+}
+
+if (value < 35) {
+    return "#d96b6b";
+}
+
+return "#a93643";
+```
+
+}
+
+/* =========================================================
+天気タイムライン
+========================================================= */
+
+const weatherTimeline =
+document.getElementById("weatherTimeline");
+
+if (weatherTimeline) {
+
+```
+weatherTimeline.innerHTML =
+    forecastLabels.map((label, index) => {
+
+        return `
+            <div class="weather-time-item">
+
+                <div class="weather-time">
+                    ${label}
+                </div>
+
+                <div class="weather-icon-large">
+                    ${forecastIcons[index] || "🌤️"}
+                </div>
+
+            </div>
+        `;
+
+    }).join("");
+```
+
+}
+
+/* =========================================================
+気温グラフ
+========================================================= */
+
+new Chart(
+document.getElementById("temperatureChart"),
+{
+
+```
     type: "line",
-    data: { labels: forecastLabels, datasets: [{
-        label: "気温", data: temperatures, tension: 0.4, pointRadius: 3, pointHoverRadius: 6,
-        pointBackgroundColor: temperatures.map(temperatureColor), pointBorderColor: "#191718", pointBorderWidth: 2, borderWidth: 2.5,
-        segment: { borderColor(context) { return temperatureColor(context.p1.parsed.y); } }
-    }]},
-    options: {
-        responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
-        plugins:{ legend:{display:false}, tooltip:{ backgroundColor:"rgba(30,27,28,.96)", borderColor:"#4a4143", borderWidth:1, padding:11, callbacks:{
-            title(items){return weatherTooltipTitle(items);},
-            label(context){const temp=temperatures[context.dataIndex]; return `気温  ${temp !== null ? temp.toFixed(1) : "—"}℃`;}
-        }}},
-        scales:{ x:{display:false}, y:{ticks:{color:textColor,maxTicksLimit:7,callback(value){return value+"℃";}},grid:{color:"rgba(150,140,142,.09)"}} }
-    }
-});
 
-new Chart(document.getElementById("rainChart"), {
-    type: "bar",
-    data: { labels: forecastLabels, datasets: [{
-        label:"降水量", data:precipitation, backgroundColor:"rgba(95,145,190,0.45)", borderColor:"rgba(125,175,215,0.75)", borderWidth:1, borderRadius:5, barPercentage:0.58, categoryPercentage:0.9
-    }]},
-    options:{
-        responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
-        plugins:{legend:{display:false}, tooltip:{backgroundColor:"rgba(30,27,28,.96)",borderColor:"#4a4143",borderWidth:1,padding:11,callbacks:{
-            title(items){return weatherTooltipTitle(items);},
-            label(context){const rain=precipitation[context.dataIndex]; return `降水量  ${rain !== null ? rain.toFixed(1) : "—"}mm`;}
-        }}},
-        scales:{
-            x:{ticks:{color:textColor,maxTicksLimit:12,autoSkip:true,maxRotation:0,minRotation:0,padding:5,font:{size:10}},grid:{color:"rgba(150,140,142,.08)",drawTicks:false}},
-            y:{beginAtZero:true,ticks:{color:"#7d9bb2",maxTicksLimit:5,callback(value){return value+"mm";}},grid:{color:"rgba(150,140,142,.08)"}}
+    data: {
+
+        labels: forecastLabels,
+
+        datasets: [
+
+            {
+
+                label: "気温",
+
+                data: temperatures,
+
+                tension: 0.35,
+
+                pointRadius: 3,
+
+                pointHoverRadius: 6,
+
+                borderWidth: 2.5,
+
+                pointBackgroundColor:
+                    temperatures.map(
+                        temperatureColor
+                    ),
+
+                pointBorderColor:
+                    temperatures.map(
+                        temperatureColor
+                    ),
+
+                segment: {
+
+                    borderColor(context) {
+
+                        return temperatureColor(
+                            context.p1.parsed.y
+                        );
+
+                    }
+
+                }
+
+            }
+
+        ]
+
+    },
+
+    options: {
+
+        responsive: true,
+
+        maintainAspectRatio: false,
+
+        interaction: {
+
+            mode: "index",
+
+            intersect: false
+
+        },
+
+        plugins: {
+
+            legend: {
+
+                display: false
+
+            },
+
+            tooltip: {
+
+                callbacks: {
+
+                    title(items) {
+
+                        const index =
+                            items[0]?.dataIndex ?? 0;
+
+                        return (
+                            `${forecastLabels[index]} ` +
+                            `${forecastIcons[index] || ""}`
+                        );
+
+                    },
+
+                    label(context) {
+
+                        const temp =
+                            temperatures[
+                                context.dataIndex
+                            ];
+
+                        return (
+                            `気温 ${
+                                temp !== null
+                                    ? temp.toFixed(1)
+                                    : "—"
+                            }℃`
+                        );
+
+                    }
+
+                }
+
+            }
+
+        },
+
+        scales: {
+
+            x: {
+
+                display: false,
+
+                grid: {
+
+                    display: false
+
+                }
+
+            },
+
+            y: {
+
+                ticks: {
+
+                    color: textColor,
+
+                    callback(value) {
+
+                        return value + "℃";
+
+                    }
+
+                },
+
+                grid: {
+
+                    color: gridColor
+
+                }
+
+            }
+
         }
+
     }
-});
+
+}
+```
+
+);
+
+/* =========================================================
+降水量グラフ
+========================================================= */
+
+new Chart(
+document.getElementById("rainChart"),
+{
+
+```
+    type: "bar",
+
+    data: {
+
+        labels: forecastLabels,
+
+        datasets: [
+
+            {
+
+                label: "降水量",
+
+                data: precipitation,
+
+                backgroundColor:
+                    "rgba(70,150,215,0.55)",
+
+                borderColor:
+                    "rgba(70,150,215,0.85)",
+
+                borderWidth: 1,
+
+                barPercentage: 0.58,
+
+                categoryPercentage: 0.88
+
+            }
+
+        ]
+
+    },
+
+    options: {
+
+        responsive: true,
+
+        maintainAspectRatio: false,
+
+        interaction: {
+
+            mode: "index",
+
+            intersect: false
+
+        },
+
+        plugins: {
+
+            legend: {
+
+                display: false
+
+            },
+
+            tooltip: {
+
+                callbacks: {
+
+                    title(items) {
+
+                        const index =
+                            items[0]?.dataIndex ?? 0;
+
+                        return (
+                            `${forecastLabels[index]} ` +
+                            `${forecastIcons[index] || ""}`
+                        );
+
+                    },
+
+                    label(context) {
+
+                        const rain =
+                            precipitation[
+                                context.dataIndex
+                            ];
+
+                        return (
+                            `降水量 ${
+                                rain !== null
+                                    ? rain.toFixed(1)
+                                    : "—"
+                            }mm`
+                        );
+
+                    }
+
+                }
+
+            }
+
+        },
+
+        scales: {
+
+            x: {
+
+                ticks: {
+
+                    color: textColor,
+
+                    maxTicksLimit: 12,
+
+                    autoSkip: true,
+
+                    padding: 5
+
+                },
+
+                grid: {
+
+                    color: gridColor
+
+                }
+
+            },
+
+            y: {
+
+                beginAtZero: true,
+
+                ticks: {
+
+                    color: textColor,
+
+                    callback(value) {
+
+                        return value + "mm";
+
+                    }
+
+                },
+
+                grid: {
+
+                    color: gridColor
+
+                }
+
+            }
+
+        }
+
+    }
+
+}
+```
+
+);
 
 
 /* =========================================================
    24時間 気圧グラフ
-   線を主役にして、変化の大きい場所だけ強調
+   気圧の線＋3時間変化の棒＋注意時間帯の背景＋注意ラベル
    ========================================================= */
 
 const pressureBackgroundPlugin = {
     id: "pressureBackgroundPlugin",
+
     beforeDatasetsDraw(chart) {
         const ctx = chart.ctx;
         const xScale = chart.scales.x;
         const chartArea = chart.chartArea;
         if (!xScale || !chartArea) return;
+
         ctx.save();
+
         for (let i = 0; i < pressureLevels.length; i++) {
             const level = pressureLevels[i];
             if (!level || level === "normal") continue;
-            const x1 = xScale.getPixelForValue(i) - 12;
-            const x2 = xScale.getPixelForValue(i) + 12;
+
+            const x1 = xScale.getPixelForValue(i);
+            const x2 = i < pressureLevels.length - 1
+                ? xScale.getPixelForValue(i + 1)
+                : x1 + 30;
+
+            let fill = "rgba(150,110,120,0.07)";
             if (level === "strong-fall" || level === "strong-rise") {
-                ctx.fillStyle = "rgba(190,80,100,.10)";
-            } else {
-                ctx.fillStyle = "rgba(150,110,120,.035)";
+                fill = "rgba(190,80,100,0.20)";
+            } else if (level === "fall") {
+                fill = "rgba(170,105,115,0.10)";
+            } else if (level === "rise") {
+                fill = "rgba(105,105,140,0.10)";
             }
-            ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+
+            ctx.fillStyle = fill;
+            ctx.fillRect(
+                x1,
+                chartArea.top,
+                x2 - x1,
+                chartArea.bottom - chartArea.top
+            );
         }
+
         ctx.restore();
     },
+
     afterDatasetsDraw(chart) {
         const ctx = chart.ctx;
         const xScale = chart.scales.x;
-        const yScale = chart.scales.pressure;
+        const yScale = chart.scales.y;
         if (!xScale || !yScale) return;
+
         ctx.save();
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
+
         for (let i = 0; i < pressureLevels.length; i++) {
             const level = pressureLevels[i];
             const change = pressureChanges[i];
-            if (!level || level === "normal" || change === null || pressures[i] == null) continue;
-            if (level !== "strong-fall" && level !== "strong-rise") continue;
+            if (!level || level === "normal" || change === null) continue;
+            if (pressures[i] === null || pressures[i] === undefined) continue;
+
             const x = xScale.getPixelForValue(i);
-            const y = Math.max(chart.chartArea.top + 18, yScale.getPixelForValue(pressures[i]) - 10);
-            ctx.font = "600 10px sans-serif";
-            ctx.fillStyle = "#d79aa2";
-            ctx.fillText("⚠ 急変", x, y);
+            const y = yScale.getPixelForValue(pressures[i]);
+
+            let label = "";
+            if (level === "strong-fall") label = "⚠ 急低下";
+            else if (level === "fall") label = "↓ 低下";
+            else if (level === "strong-rise") label = "⚠ 急上昇";
+            else if (level === "rise") label = "↑ 上昇";
+
+            ctx.font = (level === "strong-fall" || level === "strong-rise")
+                ? "600 10px sans-serif"
+                : "10px sans-serif";
+            ctx.fillStyle = (level === "strong-fall" || level === "strong-rise")
+                ? "#e0a3a9"
+                : "#b09ba0";
+
+            ctx.fillText(label, x, y - 8);
         }
+
         ctx.restore();
     }
 };
@@ -3746,95 +4263,107 @@ new Chart(document.getElementById("pressureChart"), {
     plugins: [pressureBackgroundPlugin],
     data: {
         labels: forecastLabels,
-        datasets: [{
-            label: "気圧",
-            data: pressures,
-            yAxisID: "pressure",
-            tension: 0.34,
-            pointRadius: pressures.map((_, i) => {
-                const level = pressureLevels[i];
-                return (level === "strong-fall" || level === "strong-rise") ? 5 : 2.5;
-            }),
-            pointHoverRadius: 6,
-            pointBackgroundColor: pressures.map((_, i) => {
-                const level = pressureLevels[i];
-                if (level === "strong-fall" || level === "strong-rise") return "#d27f8a";
-                if (level === "fall") return "#b28b93";
-                if (level === "rise") return "#8b86a2";
-                return "#b5adaf";
-            }),
-            pointBorderColor: "#191718",
-            pointBorderWidth: 2,
-            borderWidth: 2.5,
-            segment: {
-                borderColor(context) {
-                    const i = context.p1DataIndex;
+        datasets: [
+            {
+                label: "気圧",
+                data: pressures,
+                yAxisID: "pressure",
+                tension: 0.32,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                borderWidth: 2.5,
+                pointBackgroundColor: pressures.map((_, i) => {
                     const level = pressureLevels[i];
-                    if (level === "strong-fall") return "#d27f8a";
-                    if (level === "strong-rise") return "#9a91b8";
-                    if (level === "fall") return "#b28b93";
-                    if (level === "rise") return "#8b86a2";
-                    return "#aaa1a4";
-                }
+                    if (level === "strong-fall" || level === "strong-rise") return "#d97b86";
+                    if (level === "fall") return "#b58c94";
+                    if (level === "rise") return "#8c88a5";
+                    return "#b7afb1";
+                }),
+                pointBorderColor: pressures.map((_, i) => {
+                    const level = pressureLevels[i];
+                    if (level === "strong-fall" || level === "strong-rise") return "#d97b86";
+                    if (level === "fall") return "#b58c94";
+                    if (level === "rise") return "#8c88a5";
+                    return "#b7afb1";
+                })
             },
-            fill: false
-        }]
+            {
+                type: "bar",
+                label: "3時間変化",
+                data: pressureChanges,
+                yAxisID: "change",
+                backgroundColor: pressureChanges.map((value, i) => {
+                    const level = pressureLevels[i];
+                    if (level === "strong-fall") return "rgba(210,90,105,0.72)";
+                    if (level === "fall") return "rgba(180,110,120,0.48)";
+                    if (level === "strong-rise") return "rgba(135,125,165,0.72)";
+                    if (level === "rise") return "rgba(120,115,155,0.48)";
+                    return "rgba(130,125,135,0.18)";
+                }),
+                borderWidth: 0,
+                barPercentage: 0.72,
+                categoryPercentage: 0.9
+            }
+        ]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 22, bottom: 30, left: 2, right: 2 } },
+        layout: {
+            padding: { top: 28, bottom: 14, left: 4, right: 4 }
+        },
         interaction: { mode: "index", intersect: false },
         plugins: {
             legend: {
                 display: true,
-                position: "top",
-                align: "start",
-                labels: { color: textColor, usePointStyle: true, boxWidth: 8, padding: 16, font: { size: 10 } }
+                labels: { color: textColor, usePointStyle: true, boxWidth: 8 }
             },
             tooltip: {
-                backgroundColor: "rgba(30,27,28,.96)",
-                borderColor: "#4a4143",
-                borderWidth: 1,
-                padding: 11,
                 callbacks: {
                     title(items) {
                         const index = items[0]?.dataIndex ?? 0;
-                        const level = pressureLevels[index];
-                        const mark = level === "strong-fall" || level === "strong-rise" ? "  ⚠" : "";
-                        return `${forecastLabels[index]}${mark}`;
+                        return `${forecastLabels[index]} ${pressureLevels[index] === "strong-fall" || pressureLevels[index] === "strong-rise" ? "⚠" : ""}`;
                     },
                     label(context) {
-                        const i = context.dataIndex;
-                        const pressure = pressures[i];
-                        const change = pressureChanges[i];
-                        return [
-                            `気圧  ${pressure != null ? pressure.toFixed(1) : "—"} hPa`,
-                            `3時間変化  ${change != null ? (change >= 0 ? "+" : "") + change.toFixed(1) : "—"} hPa`
-                        ];
+                        const index = context.dataIndex;
+                        if (context.datasetIndex === 0) {
+                            const pressure = pressures[index];
+                            return `気圧 ${pressure !== null ? pressure.toFixed(1) : "—"} hPa`;
+                        }
+                        const change = pressureChanges[index];
+                        return `3時間変化 ${change !== null ? (change >= 0 ? "+" : "") + change.toFixed(1) : "—"} hPa`;
                     }
                 }
             }
         },
         scales: {
             x: {
-                offset: true,
                 ticks: {
                     color: textColor,
                     maxTicksLimit: 12,
                     autoSkip: true,
-                    maxRotation: 0,
-                    minRotation: 0,
-                    padding: 9,
-                    font: { size: 10 }
+                    padding: 6
                 },
-                grid: { color: "rgba(150,140,142,.08)", drawTicks: false }
+                grid: { color: gridColor }
             },
             pressure: {
                 type: "linear",
                 position: "left",
-                ticks: { color: textColor, maxTicksLimit: 7, callback(value) { return value + " hPa"; } },
-                grid: { color: "rgba(150,140,142,.09)" }
+                ticks: {
+                    color: textColor,
+                    callback(value) { return value + " hPa"; }
+                },
+                grid: { color: gridColor }
+            },
+            change: {
+                type: "linear",
+                position: "right",
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                ticks: {
+                    color: textColor,
+                    callback(value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + " hPa"; }
+                }
             }
         }
     }
@@ -4029,6 +4558,9 @@ def index():
         item["display_weather"] = (
             weather_display(item)
         )
+        item["situation"] = (
+            situation_display(item)
+        )
 
         item["health_level"] = (
             health_attention_level(
@@ -4047,150 +4579,6 @@ def index():
         item["travel_reason"] = (
             travel_reason(item)
         )
-
-
-    # --------------------------------------------------------
-    # 🐕 いよかん生活ガイド
-    # --------------------------------------------------------
-
-    def dog_aircon_level(temp, humidity):
-        if temp is None:
-            return "unknown"
-
-        # 25℃以下は基本的に冷房不要
-        if temp <= 25:
-            if humidity is not None and humidity >= 90:
-                return "attention"
-            return "off"
-
-        if temp <= 27:
-            return "watch"
-
-        if temp <= 29:
-            return "recommended"
-
-        return "strong"
-
-
-    def dog_walk_level(temp, rain, wind, humidity=None):
-        if temp is None:
-            return "attention"
-
-        if rain is not None and rain >= 5:
-            return "danger"
-
-        if wind is not None and wind >= 10:
-            return "danger"
-
-        if temp >= 30:
-            return "danger"
-
-        if temp >= 27:
-            return "attention"
-
-        if humidity is not None and humidity >= 90 and temp >= 25:
-            return "attention"
-
-        if rain is not None and rain > 0:
-            return "attention"
-
-        return "good"
-
-
-    def dog_asphalt_level(temp, rain):
-        if temp is None:
-            return "attention"
-
-        if temp >= 30:
-            return "danger"
-
-        if temp >= 27:
-            return "attention"
-
-        return "good"
-
-
-    dog_guidance = []
-
-    for item in forecasts:
-        temp = item.get("temperature")
-        rain = item.get("precipitation")
-        humidity = item.get("humidity")
-        wind = item.get("wind")
-
-        walk = dog_walk_level(
-            temp,
-            rain,
-            wind,
-            humidity
-        )
-
-        asphalt = dog_asphalt_level(
-            temp,
-            rain
-        )
-
-        aircon = dog_aircon_level(
-            temp,
-            humidity
-        )
-
-        dog_guidance.append({
-            "time": item["dt"].strftime("%H:%M"),
-            "walk": walk,
-            "asphalt": asphalt,
-            "aircon": aircon
-        })
-
-
-    dog_walk_good_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["walk"] == "good"
-    ]
-
-    dog_walk_attention_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["walk"] == "attention"
-    ]
-
-    dog_walk_danger_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["walk"] == "danger"
-    ]
-
-    asphalt_ng_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["asphalt"] == "danger"
-    ]
-
-    aircon_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["aircon"] in ("recommended", "strong")
-    ]
-
-    foothill_walk_attention_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["walk"] == "attention"
-    ]
-
-    foothill_walk_danger_times = [
-        item["time"]
-        for item in dog_guidance
-        if item["walk"] == "danger"
-    ]
-
-    if aircon_times:
-        aircon_range = (
-            f"{aircon_times[0]}〜{aircon_times[-1]}"
-        )
-    else:
-        aircon_range = None
 
 
     # --------------------------------------------------------
@@ -4491,15 +4879,6 @@ def index():
         pressure_changes=(
             pressure_changes_json
         ),
-
-        dog_walk_good_times=dog_walk_good_times,
-        dog_walk_attention_times=dog_walk_attention_times,
-        dog_walk_danger_times=dog_walk_danger_times,
-        foothill_walk_attention_times=foothill_walk_attention_times,
-        foothill_walk_danger_times=foothill_walk_danger_times,
-        asphalt_ng_times=asphalt_ng_times,
-        aircon_times=aircon_times,
-        aircon_range=aircon_range,
 
     )
 
