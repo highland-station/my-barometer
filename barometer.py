@@ -2055,13 +2055,13 @@ body {
     display: grid;
 
     grid-template-columns:
-    85px
-    75px
-    260px
     90px
-    100px
-    110px
-    115px;
+    80px
+    320px
+    95px
+    105px
+    115px
+    120px;
 
     align-items: center;
 
@@ -2091,8 +2091,17 @@ body {
     letter-spacing: .05em;
 }
 
-.header-row > div {
+.header-row > div:nth-child(1) {
+    text-align: left;
+    padding-left: 8px;
+}
+
+.header-row > div:nth-child(2) {
     text-align: center;
+}
+
+.header-row > div:nth-child(3) {
+    text-align: left;
 }
 
 .hour-time {
