@@ -2060,9 +2060,9 @@ body {
         70px
         80px
         86px
-        1fr;
+        105px;
 
-    justify-content: start;
+    justify-content: stretch;
 
     align-items: center;
 
