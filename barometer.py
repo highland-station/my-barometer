@@ -4584,6 +4584,8 @@ def index():
 
         forecasts=forecasts,
 
+        situation_display=situation_display,
+
         health_attention=(
             health_attention
         ),
