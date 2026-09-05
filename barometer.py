@@ -2060,7 +2060,7 @@ body {
         70px
         80px
         86px
-        105px;
+        1fr;
 
     justify-content: start;
 
