@@ -2055,15 +2055,13 @@ body {
     display: grid;
 
     grid-template-columns:
-        70px
-        60px
-        150px
-        75px
-        85px
-        90px
-        95px;
-
-    justify-content: stretch;
+    80px
+    70px
+    220px
+    85px
+    95px
+    105px
+    110px;
 
     align-items: center;
 
@@ -2112,18 +2110,17 @@ body {
 }
 
 .hour-temp {
-    text-align: right;
+    text-align: center;
 }
 
 .hour-rain {
-    text-align: right;
+    text-align: center;
 }
 
 .hour-pressure {
-    text-align: right;
+    text-align: center;
     color: #aaa1a3;
 }
-
 .travel-status {
 
     text-align: center;
