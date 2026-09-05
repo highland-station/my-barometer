@@ -2240,7 +2240,7 @@ body {
 /* 状況 */
 
 .header-row > div:nth-child(3) {
-    text-align: left;
+    text-align: center;
 }
 
 
