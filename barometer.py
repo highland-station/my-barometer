@@ -3393,7 +3393,7 @@ new Chart(document.getElementById("weatherChart"), {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-            padding: { bottom: 62, top: 8, left: 4, right: 4 }
+            padding: { bottom: 25, top: 8, left: 4, right: 4 }
         },
         interaction: { mode: "index", intersect: false },
         plugins: {
