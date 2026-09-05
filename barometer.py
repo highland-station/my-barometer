@@ -2120,22 +2120,26 @@ body {
 
 .hour-weather {
     color: #d4cccd;
+    padding-left: 15px;
 }
 
 .hour-temp {
     text-align: center;
+    padding-left: 15px;
 }
 
 .hour-rain {
     text-align: center;
+    padding-left: 15px;
 }
 
 .hour-pressure {
     text-align: center;
-    color: #aaa1a3;
+    padding-left: 15px;
 }
-.travel-status {
-
+.hour-row > div:last-child {
+    padding-left: 15px;
+}
     text-align: center;
 
     font-size: 11px;
