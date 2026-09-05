@@ -2178,13 +2178,13 @@ body {
     display: grid;
 
     grid-template-columns:
-        70px
-        145px
-        minmax(220px, 1fr)
+        65px
+        135px
+        minmax(260px, 1fr)
         65px
         75px
-        85px
-        95px;
+        80px
+        80px;
 
     align-items: center;
 
@@ -2192,7 +2192,7 @@ body {
 
     border-bottom: 1px solid #302a2c;
 
-    gap: 6px;
+    gap: 4px;
 
     padding: 6px 4px;
 
