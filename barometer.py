@@ -2204,139 +2204,83 @@ body {
 
 
 /* =========================================================
-   グラフ｜落ち着いた山の天気ダッシュボード
+   グラフ
    ========================================================= */
 
-.chart-card {
-    background: linear-gradient(145deg, #242021 0%, #1d1a1b 100%);
-    border: 1px solid #3a3335;
-    border-radius: 18px;
-    padding: 18px 18px 16px;
-    box-shadow: 0 14px 35px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.025);
-}
-
-.chart-head {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 12px;
-}
-
-.chart-kicker {
-    color: #8f8587;
-    font-size: 10px;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-}
-
-.chart-name {
-    color: #eee8e8;
-    font-size: 16px;
-    font-weight: 500;
-    letter-spacing: .04em;
-}
-
-.chart-note {
-    color: #8f8587;
-    font-size: 10px;
-    line-height: 1.6;
-    text-align: right;
-}
-
 .chart-box {
-    position: relative;
-    background: #191718;
-    border: 1px solid #302a2c;
-    border-radius: 13px;
-    padding: 8px 10px 4px;
-    height: 405px;
-    overflow: hidden;
+
+    background: #211d1e;
+
+    border: 1px solid #332d2f;
+
+    border-radius: 12px;
+
+    padding: 14px 16px 12px;
+
+    height: 420px;
+
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
 }
 
 .chart-box.pressure-chart-box {
-    height: 410px;
-}
-
-.chart-box canvas {
-    width: 100% !important;
-    height: 100% !important;
-}
-
-.pressure-summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin-top: 10px;
-}
-
-.pressure-summary-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 9px;
-    border-radius: 999px;
-    background: #211d1e;
-    border: 1px solid #393234;
-    color: #aaa1a3;
-    font-size: 10px;
-}
-
-.pressure-summary-chip strong {
-    color: #e4dddd;
-    font-weight: 500;
+    height: 440px;
 }
 
 .pressure-alerts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 8px;
     margin-top: 10px;
 }
 
 .pressure-alert {
-    padding: 9px 11px;
-    border-radius: 11px;
-    border: 1px solid #383133;
-    background: #201c1d;
-    font-size: 11px;
-    line-height: 1.55;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid #3b3436;
+    background: #1d191a;
+    font-size: 12px;
+    line-height: 1.6;
 }
 
 .pressure-alert.strong {
-    border-color: #704b52;
-    background: rgba(180,70,85,.08);
+    border-color: #85545d;
+    background: rgba(180,70,85,.10);
 }
 
 .pressure-alert.attention {
-    border-color: #51474a;
-    background: rgba(150,100,110,.045);
+    border-color: #695358;
+    background: rgba(150,100,110,.07);
 }
 
 .pressure-alert-title {
     font-weight: 600;
-    color: #ddd5d6;
-    margin-bottom: 1px;
+    margin-bottom: 2px;
 }
 
 .pressure-alert-detail {
-    color: #91888a;
+    color: #aaa1a3;
 }
 
-.chart-explanation {
-    margin-top: 9px;
-    color: #81797b;
-    font-size: 10px;
-    line-height: 1.7;
+.chart-subtitle {
+    margin: -5px 0 10px;
+    color: #8d8587;
+    font-size: 11px;
+}
+
+.chart-box canvas {
+
+    width: 100% !important;
+
+    height: 100% !important;
 }
 
 .temperature-legend {
+
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: 10px 14px;
     margin-top: 10px;
-    color: #8e8587;
+    color: #91888a;
     font-size: 10px;
 }
 
@@ -2348,8 +2292,8 @@ body {
 
 .temp-dot {
     display: inline-block;
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
 }
 
@@ -2363,30 +2307,83 @@ body {
 .temp-extreme { background: #d96b6b; }
 .temp-danger { background: #a93643; }
 
+
+.chart-explanation {
+
+    margin-top: 10px;
+
+    color: #81797b;
+
+    font-size: 11px;
+
+    line-height: 1.7;
+}
+
 .legend-note {
+
     display: flex;
-    gap: 14px;
+
+    gap: 18px;
+
     flex-wrap: wrap;
-    margin-top: 9px;
-    color: #8d8587;
-    font-size: 10px;
+
+    margin-top: 10px;
+
+    color: #91888a;
+
+    font-size: 11px;
 }
 
 .legend-item {
+
     display: flex;
+
     align-items: center;
+
     gap: 6px;
 }
 
 .legend-dot {
-    width: 7px;
-    height: 7px;
+
+    width: 9px;
+
+    height: 9px;
+
     border-radius: 50%;
+
     background: #8d6b70;
 }
 
-.legend-dot.strong { background: #b87880; }
-.legend-dot.rise { background: #706e86; }
+.legend-dot.strong {
+    background: #b87880;
+}
+
+.legend-dot.rise {
+    background: #706e86;
+}
+
+.error {
+
+    color: #b8878d;
+
+    font-size: 12px;
+
+    padding: 10px 0;
+}
+
+.footer {
+
+    margin-top: 35px;
+
+    padding-top: 18px;
+
+    border-top: 1px solid #393234;
+
+    color: #70696b;
+
+    font-size: 11px;
+}
+
 
 /* =========================================================
    スマホ
@@ -2421,25 +2418,15 @@ body {
         min-width: 660px;
     }
 
-    .chart-card {
-        padding: 14px 12px 12px;
-    }
-
-    .chart-head {
-        align-items: flex-start;
-    }
-
-    .chart-note {
-        display: none;
-    }
-
     .chart-box {
-        height: 380px;
-        padding: 6px 6px 2px;
+
+        height: 390px;
+
+        padding: 10px;
     }
 
     .chart-box.pressure-chart-box {
-        height: 385px;
+        height: 410px;
     }
 }
 
@@ -3187,20 +3174,13 @@ body {
 <section class="section">
 
     <div class="section-title">
-        📈 24時間の天気
+        📈 24時間の天気グラフ
     </div>
 
-    <div class="chart-card">
-        <div class="chart-head">
-            <div>
-                <div class="chart-kicker">NEXT 24 HOURS</div>
-                <div class="chart-name">気温と降水量</div>
-            </div>
-            <div class="chart-note">気温の線と雨量の棒を重ねて<br>天気の流れをひと目で確認</div>
-        </div>
-        <div class="chart-box">
-            <canvas id="weatherChart"></canvas>
-        </div>
+    <div class="chart-box">
+
+        <canvas id="weatherChart"></canvas>
+
     </div>
 
     <div class="temperature-legend">
@@ -3235,22 +3215,14 @@ body {
         📉 24時間の気圧
     </div>
 
-    <div class="chart-card">
-        <div class="chart-head">
-            <div>
-                <div class="chart-kicker">BAROMETER TREND</div>
-                <div class="chart-name">気圧の流れ</div>
-            </div>
-            <div class="chart-note">線が上がる＝気圧上昇<br>線が下がる＝気圧低下</div>
-        </div>
-        <div class="chart-box pressure-chart-box">
-            <canvas id="pressureChart"></canvas>
-        </div>
-        <div class="pressure-summary">
-            <div class="pressure-summary-chip">● <strong>気圧</strong> 自宅標高補正</div>
-            <div class="pressure-summary-chip">↓ <strong>低下</strong> 3時間変化</div>
-            <div class="pressure-summary-chip">⚠ <strong>急変</strong> 要注意ポイント</div>
-        </div>
+    <div class="chart-subtitle">
+        線＝自宅地点の気圧　｜　棒＝直近3時間の気圧変化　｜　背景＝注意時間帯
+    </div>
+
+    <div class="chart-box pressure-chart-box">
+
+        <canvas id="pressureChart"></canvas>
+
     </div>
 
     <div id="pressureAlerts" class="pressure-alerts"></div>
@@ -3337,112 +3309,143 @@ const textColor = "#8d8587";
 
 /* =========================================================
    24時間 天気グラフ
+   時間と天気マークを分離し、スマホでも重ならないようにする。
    ========================================================= */
+
+function temperatureColor(value) {
+    if (value === null || value === undefined) return "#9a9294";
+    if (value < 0) return "#315f9e";
+    if (value < 5) return "#5c8fd8";
+    if (value < 10) return "#62b5d6";
+    if (value < 15) return "#65b99a";
+    if (value < 20) return "#9fbe68";
+    if (value < 25) return "#d7c45f";
+    if (value < 30) return "#df9a55";
+    if (value < 35) return "#d96b6b";
+    return "#a93643";
+}
+
+const weatherAxisPlugin = {
+    id: "weatherAxisPlugin",
+    afterDraw(chart) {
+        const ctx = chart.ctx;
+        const xScale = chart.scales.x;
+        const chartArea = chart.chartArea;
+        if (!xScale || !chartArea) return;
+
+        const width = chartArea.right - chartArea.left;
+        const step = width < 700 ? 2 : 1;
+
+        ctx.save();
+        ctx.font = "17px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        for (let i = 0; i < forecastIcons.length; i += step) {
+            const x = xScale.getPixelForValue(i);
+            ctx.fillText(
+                forecastIcons[i] || "",
+                x,
+                chartArea.bottom + 24
+            );
+        }
+        ctx.restore();
+    }
+};
 
 new Chart(document.getElementById("weatherChart"), {
     type: "line",
+    plugins: [weatherAxisPlugin],
     data: {
         labels: forecastLabels,
         datasets: [
             {
-                type: "bar",
-                label: "降水量",
-                data: precipitation,
-                yAxisID: "rain",
-                backgroundColor: "rgba(95,145,190,0.34)",
-                borderColor: "rgba(125,175,215,0.65)",
-                borderWidth: 1,
-                borderRadius: 5,
-                barPercentage: 0.52,
-                categoryPercentage: 0.82,
-                order: 2
-            },
-            {
-                type: "line",
                 label: "気温",
                 data: temperatures,
                 yAxisID: "temperature",
-                tension: 0.38,
-                pointRadius: 3.5,
-                pointHoverRadius: 6,
+                tension: 0.35,
+                pointRadius: 2.5,
+                pointHoverRadius: 5,
                 pointBackgroundColor: temperatures.map(temperatureColor),
-                pointBorderColor: "#191718",
-                pointBorderWidth: 2,
+                pointBorderColor: temperatures.map(temperatureColor),
                 borderWidth: 2.5,
                 segment: {
                     borderColor(context) {
                         return temperatureColor(context.p1.parsed.y);
                     }
-                },
-                order: 1
+                }
+            },
+            {
+                type: "bar",
+                label: "降水量",
+                data: precipitation,
+                yAxisID: "rain",
+                backgroundColor: "rgba(70,150,215,0.55)",
+                borderColor: "rgba(70,150,215,0.85)",
+                borderWidth: 1,
+                barPercentage: 0.58,
+                categoryPercentage: 0.88
             }
         ]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 8, bottom: 30, left: 2, right: 2 } },
+        layout: {
+            padding: { bottom: 62, top: 8, left: 4, right: 4 }
+        },
         interaction: { mode: "index", intersect: false },
         plugins: {
             legend: {
                 display: true,
-                position: "top",
-                align: "start",
-                labels: { color: textColor, usePointStyle: true, boxWidth: 8, padding: 16, font: { size: 10 } }
+                labels: { color: textColor, usePointStyle: true, boxWidth: 8 }
             },
             tooltip: {
-                backgroundColor: "rgba(30,27,28,.96)",
-                borderColor: "#4a4143",
-                borderWidth: 1,
-                padding: 11,
                 callbacks: {
                     title(items) {
                         const index = items[0]?.dataIndex ?? 0;
-                        return `${forecastLabels[index]}  ${forecastIcons[index] || ""}`;
+                        return `${forecastLabels[index]} ${forecastIcons[index] || ""}`;
                     },
                     label(context) {
                         const index = context.dataIndex;
-                        if (context.dataset.label === "気温") {
+                        if (context.datasetIndex === 0) {
                             const temp = temperatures[index];
-                            return `気温  ${temp !== null ? temp.toFixed(1) : "—"}℃`;
+                            return `気温 ${temp !== null ? temp.toFixed(1) : "—"}℃`;
                         }
                         const rain = precipitation[index];
-                        return `降水量  ${rain !== null ? rain.toFixed(1) : "—"}mm`;
+                        return `降水量 ${rain !== null ? rain.toFixed(1) : "—"}mm`;
                     }
                 }
             }
         },
         scales: {
             x: {
-                offset: true,
                 ticks: {
                     color: textColor,
                     maxTicksLimit: 12,
                     autoSkip: true,
-                    maxRotation: 0,
-                    minRotation: 0,
-                    padding: 9,
-                    font: { size: 10 },
-                    callback(value, index) {
-                        const time = forecastLabels[index] || "";
-                        const icon = forecastIcons[index] || "";
-                        return [time, icon];
-                    }
+                    padding: 8
                 },
-                grid: { color: "rgba(150,140,142,.08)", drawTicks: false }
+                grid: { color: gridColor }
             },
             temperature: {
                 type: "linear",
                 position: "left",
-                ticks: { color: textColor, maxTicksLimit: 7, callback(value) { return value + "℃"; } },
-                grid: { color: "rgba(150,140,142,.09)" }
+                ticks: {
+                    color: textColor,
+                    callback(value) { return value + "℃"; }
+                },
+                grid: { color: gridColor }
             },
             rain: {
                 type: "linear",
                 position: "right",
                 beginAtZero: true,
                 grid: { drawOnChartArea: false },
-                ticks: { color: "#7d9bb2", maxTicksLimit: 5, callback(value) { return value + "mm"; } }
+                ticks: {
+                    color: textColor,
+                    callback(value) { return value + "mm"; }
+                }
             }
         }
     }
@@ -3450,50 +3453,85 @@ new Chart(document.getElementById("weatherChart"), {
 
 /* =========================================================
    24時間 気圧グラフ
-   線を主役にして、変化の大きい場所だけ強調
+   気圧の線＋3時間変化の棒＋注意時間帯の背景＋注意ラベル
    ========================================================= */
 
 const pressureBackgroundPlugin = {
     id: "pressureBackgroundPlugin",
+
     beforeDatasetsDraw(chart) {
         const ctx = chart.ctx;
         const xScale = chart.scales.x;
         const chartArea = chart.chartArea;
         if (!xScale || !chartArea) return;
+
         ctx.save();
+
         for (let i = 0; i < pressureLevels.length; i++) {
             const level = pressureLevels[i];
             if (!level || level === "normal") continue;
-            const x1 = xScale.getPixelForValue(i) - 12;
-            const x2 = xScale.getPixelForValue(i) + 12;
+
+            const x1 = xScale.getPixelForValue(i);
+            const x2 = i < pressureLevels.length - 1
+                ? xScale.getPixelForValue(i + 1)
+                : x1 + 30;
+
+            let fill = "rgba(150,110,120,0.07)";
             if (level === "strong-fall" || level === "strong-rise") {
-                ctx.fillStyle = "rgba(190,80,100,.10)";
-            } else {
-                ctx.fillStyle = "rgba(150,110,120,.035)";
+                fill = "rgba(190,80,100,0.20)";
+            } else if (level === "fall") {
+                fill = "rgba(170,105,115,0.10)";
+            } else if (level === "rise") {
+                fill = "rgba(105,105,140,0.10)";
             }
-            ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+
+            ctx.fillStyle = fill;
+            ctx.fillRect(
+                x1,
+                chartArea.top,
+                x2 - x1,
+                chartArea.bottom - chartArea.top
+            );
         }
+
         ctx.restore();
     },
+
     afterDatasetsDraw(chart) {
         const ctx = chart.ctx;
         const xScale = chart.scales.x;
-        const yScale = chart.scales.pressure;
+        const yScale = chart.scales.y;
         if (!xScale || !yScale) return;
+
         ctx.save();
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
+
         for (let i = 0; i < pressureLevels.length; i++) {
             const level = pressureLevels[i];
             const change = pressureChanges[i];
-            if (!level || level === "normal" || change === null || pressures[i] == null) continue;
-            if (level !== "strong-fall" && level !== "strong-rise") continue;
+            if (!level || level === "normal" || change === null) continue;
+            if (pressures[i] === null || pressures[i] === undefined) continue;
+
             const x = xScale.getPixelForValue(i);
-            const y = Math.max(chart.chartArea.top + 18, yScale.getPixelForValue(pressures[i]) - 10);
-            ctx.font = "600 10px sans-serif";
-            ctx.fillStyle = "#d79aa2";
-            ctx.fillText("⚠ 急変", x, y);
+            const y = yScale.getPixelForValue(pressures[i]);
+
+            let label = "";
+            if (level === "strong-fall") label = "⚠ 急低下";
+            else if (level === "fall") label = "↓ 低下";
+            else if (level === "strong-rise") label = "⚠ 急上昇";
+            else if (level === "rise") label = "↑ 上昇";
+
+            ctx.font = (level === "strong-fall" || level === "strong-rise")
+                ? "600 10px sans-serif"
+                : "10px sans-serif";
+            ctx.fillStyle = (level === "strong-fall" || level === "strong-rise")
+                ? "#e0a3a9"
+                : "#b09ba0";
+
+            ctx.fillText(label, x, y - 8);
         }
+
         ctx.restore();
     }
 };
@@ -3503,95 +3541,107 @@ new Chart(document.getElementById("pressureChart"), {
     plugins: [pressureBackgroundPlugin],
     data: {
         labels: forecastLabels,
-        datasets: [{
-            label: "気圧",
-            data: pressures,
-            yAxisID: "pressure",
-            tension: 0.34,
-            pointRadius: pressures.map((_, i) => {
-                const level = pressureLevels[i];
-                return (level === "strong-fall" || level === "strong-rise") ? 5 : 2.5;
-            }),
-            pointHoverRadius: 6,
-            pointBackgroundColor: pressures.map((_, i) => {
-                const level = pressureLevels[i];
-                if (level === "strong-fall" || level === "strong-rise") return "#d27f8a";
-                if (level === "fall") return "#b28b93";
-                if (level === "rise") return "#8b86a2";
-                return "#b5adaf";
-            }),
-            pointBorderColor: "#191718",
-            pointBorderWidth: 2,
-            borderWidth: 2.5,
-            segment: {
-                borderColor(context) {
-                    const i = context.p1DataIndex;
+        datasets: [
+            {
+                label: "気圧",
+                data: pressures,
+                yAxisID: "pressure",
+                tension: 0.32,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                borderWidth: 2.5,
+                pointBackgroundColor: pressures.map((_, i) => {
                     const level = pressureLevels[i];
-                    if (level === "strong-fall") return "#d27f8a";
-                    if (level === "strong-rise") return "#9a91b8";
-                    if (level === "fall") return "#b28b93";
-                    if (level === "rise") return "#8b86a2";
-                    return "#aaa1a4";
-                }
+                    if (level === "strong-fall" || level === "strong-rise") return "#d97b86";
+                    if (level === "fall") return "#b58c94";
+                    if (level === "rise") return "#8c88a5";
+                    return "#b7afb1";
+                }),
+                pointBorderColor: pressures.map((_, i) => {
+                    const level = pressureLevels[i];
+                    if (level === "strong-fall" || level === "strong-rise") return "#d97b86";
+                    if (level === "fall") return "#b58c94";
+                    if (level === "rise") return "#8c88a5";
+                    return "#b7afb1";
+                })
             },
-            fill: false
-        }]
+            {
+                type: "bar",
+                label: "3時間変化",
+                data: pressureChanges,
+                yAxisID: "change",
+                backgroundColor: pressureChanges.map((value, i) => {
+                    const level = pressureLevels[i];
+                    if (level === "strong-fall") return "rgba(210,90,105,0.72)";
+                    if (level === "fall") return "rgba(180,110,120,0.48)";
+                    if (level === "strong-rise") return "rgba(135,125,165,0.72)";
+                    if (level === "rise") return "rgba(120,115,155,0.48)";
+                    return "rgba(130,125,135,0.18)";
+                }),
+                borderWidth: 0,
+                barPercentage: 0.72,
+                categoryPercentage: 0.9
+            }
+        ]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: { padding: { top: 22, bottom: 30, left: 2, right: 2 } },
+        layout: {
+            padding: { top: 28, bottom: 14, left: 4, right: 4 }
+        },
         interaction: { mode: "index", intersect: false },
         plugins: {
             legend: {
                 display: true,
-                position: "top",
-                align: "start",
-                labels: { color: textColor, usePointStyle: true, boxWidth: 8, padding: 16, font: { size: 10 } }
+                labels: { color: textColor, usePointStyle: true, boxWidth: 8 }
             },
             tooltip: {
-                backgroundColor: "rgba(30,27,28,.96)",
-                borderColor: "#4a4143",
-                borderWidth: 1,
-                padding: 11,
                 callbacks: {
                     title(items) {
                         const index = items[0]?.dataIndex ?? 0;
-                        const level = pressureLevels[index];
-                        const mark = level === "strong-fall" || level === "strong-rise" ? "  ⚠" : "";
-                        return `${forecastLabels[index]}${mark}`;
+                        return `${forecastLabels[index]} ${pressureLevels[index] === "strong-fall" || pressureLevels[index] === "strong-rise" ? "⚠" : ""}`;
                     },
                     label(context) {
-                        const i = context.dataIndex;
-                        const pressure = pressures[i];
-                        const change = pressureChanges[i];
-                        return [
-                            `気圧  ${pressure != null ? pressure.toFixed(1) : "—"} hPa`,
-                            `3時間変化  ${change != null ? (change >= 0 ? "+" : "") + change.toFixed(1) : "—"} hPa`
-                        ];
+                        const index = context.dataIndex;
+                        if (context.datasetIndex === 0) {
+                            const pressure = pressures[index];
+                            return `気圧 ${pressure !== null ? pressure.toFixed(1) : "—"} hPa`;
+                        }
+                        const change = pressureChanges[index];
+                        return `3時間変化 ${change !== null ? (change >= 0 ? "+" : "") + change.toFixed(1) : "—"} hPa`;
                     }
                 }
             }
         },
         scales: {
             x: {
-                offset: true,
                 ticks: {
                     color: textColor,
                     maxTicksLimit: 12,
                     autoSkip: true,
-                    maxRotation: 0,
-                    minRotation: 0,
-                    padding: 9,
-                    font: { size: 10 }
+                    padding: 6
                 },
-                grid: { color: "rgba(150,140,142,.08)", drawTicks: false }
+                grid: { color: gridColor }
             },
             pressure: {
                 type: "linear",
                 position: "left",
-                ticks: { color: textColor, maxTicksLimit: 7, callback(value) { return value + " hPa"; } },
-                grid: { color: "rgba(150,140,142,.09)" }
+                ticks: {
+                    color: textColor,
+                    callback(value) { return value + " hPa"; }
+                },
+                grid: { color: gridColor }
+            },
+            change: {
+                type: "linear",
+                position: "right",
+                beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                ticks: {
+                    color: textColor,
+                    callback(value) { return (value >= 0 ? "+" : "") + value.toFixed(1) + " hPa"; }
+                }
             }
         }
     }
