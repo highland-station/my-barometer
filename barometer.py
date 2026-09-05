@@ -2128,23 +2128,18 @@ body {
 .hour-weather {
     color: #d4cccd;
     text-align: center;
-}    padding-left: 15px;
-}
-
+}    
 .hour-temp {
-    text-align: center;
-    padding-left: 15px;
+    text-align: left;
+    padding-left: 18px;
 }
 
 .hour-rain {
     text-align: center;
-    padding-left: 15px;
-}
-
+    
 .hour-pressure {
     text-align: center;
-    padding-left: 15px;
-}
+
 .hour-row > div:last-child {
     padding-left: 15px;
 }
