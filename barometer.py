@@ -2243,6 +2243,12 @@ body {
 .hour-weather {
     color: #d4cccd;
     text-align: center;
+    white-space: nowrap;
+}
+
+.hour-weather .hour-icon {
+    display: inline;
+    margin-right: 4px;
 }
 .hour-situation {
     text-align: center;
@@ -3457,12 +3463,11 @@ body {
             </div>
 
 
-            <div class="hour-icon">
-                {{ item.icon }}
-            </div>
-
-
             <div class="hour-weather">
+
+                <span class="hour-icon">
+                    {{ item.icon }}
+                </span>
 
                 {% if item.travel_level == "danger" %}
                     <strong>⚠️</strong>
@@ -3473,11 +3478,10 @@ body {
                         🩺
                     </span>
                 {% endif %}
-
+  
                 {{ item.display_weather }}
 
             </div>
-
 
 
             <div class="hour-situation">
