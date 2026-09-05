@@ -2215,8 +2215,31 @@ body {
     letter-spacing: .05em;
 }
 
+.hour-row.header-row > div {
+    display: flex;
+    align-items: center;
+}
+
+.hour-row.header-row > div:nth-child(1) {
+    justify-content: center;
+}
+
+.hour-row.header-row > div:nth-child(2) {
+    justify-content: center;
+}
+
 .hour-row.header-row > div:nth-child(3) {
-    text-align: center;
+    justify-content: center;
+}
+
+.hour-row.header-row > div:nth-child(4),
+.hour-row.header-row > div:nth-child(5),
+.hour-row.header-row > div:nth-child(6) {
+    justify-content: flex-end;
+}
+
+.hour-row.header-row > div:nth-child(7) {
+    justify-content: center;
 }
 
 .hour-time {
@@ -3450,10 +3473,7 @@ body {
                     {{ item.icon }}
                 </span>
 
-                {% if item.travel_level == "danger" %}
-                    <strong>⚠️</strong>
-                {% endif %}
-
+                
                 {% if item.health_level == "strong" %}
                     <span class="health-attention">
                         🩺
