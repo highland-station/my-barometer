@@ -2180,7 +2180,7 @@ body {
     grid-template-columns:
         65px
         135px
-        minmax(0, 1fr)
+        180px
         65px
         75px
         80px
