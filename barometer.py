@@ -2180,7 +2180,7 @@ body {
     grid-template-columns:
         65px
         135px
-        minmax(260px, 1fr)
+        260px
         65px
         75px
         80px
@@ -2280,10 +2280,18 @@ body {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 6px;
     white-space: nowrap;
     color: #aaa1a3;
     line-height: 1.2;
+}
+
+.hour-pressure .pressure-value {
+    display: inline-block;
+    font-size: 12px;
+    margin-top: 0;
+    line-height: 1.2;
+    flex-shrink: 0;
 }
 .travel-status {
     text-align: center;
