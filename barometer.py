@@ -2041,7 +2041,8 @@ body {
    ========================================================= */
 
 .hourly {
-
+    width: 100%;
+    
     border-top: 1px solid #393234;
 
     border-bottom: 1px solid #393234;
@@ -2054,13 +2055,13 @@ body {
     display: grid;
 
     grid-template-columns:
-        64px
-        54px
-        112px
         70px
-        80px
-        86px
-        105px;
+        60px
+        minmax(110px, 1fr)
+        75px
+        85px
+        90px
+        110px;
 
     justify-content: stretch;
 
