@@ -2279,6 +2279,8 @@ body {
 .hour-pressure {
     text-align: right;
     color: #aaa1a3;
+    white-space: nowrap;
+    line-height: 1.2;
 }
 
 .travel-status {
