@@ -1191,6 +1191,137 @@ def weather_display(item):
 
     return weather
 
+# ============================================================
+# 状況表示
+# ============================================================
+
+def situation_display(item):
+
+    situations = []
+
+    rain = item.get("precipitation")
+    thunder = item.get("thunder_probability")
+    wind = item.get("wind")
+    humidity = item.get("humidity")
+    cloud = item.get("cloud_area_fraction")
+
+    weather = item.get(
+        "weather",
+        ""
+    ) or ""
+
+    symbol = (
+        item.get("symbol")
+        or ""
+    ).lower()
+
+    fog_level = fog_visibility_level(item)
+
+    # --------------------------------------------------------
+    # 雷
+    # --------------------------------------------------------
+
+    thunder_risk = (
+        (
+            thunder is not None
+            and thunder >= 30
+        )
+        or "雷" in weather
+        or "thunder" in symbol
+    )
+
+    if thunder_risk:
+        situations.append("⚡ 雷に注意")
+
+
+    # --------------------------------------------------------
+    # 強い雨
+    # --------------------------------------------------------
+
+    if rain is not None:
+
+        if rain >= 5:
+            situations.append("🌧️ 強い雨")
+
+        elif rain >= 1:
+            situations.append("🌧️ 雨")
+
+
+    # --------------------------------------------------------
+    # 霧・視界
+    # --------------------------------------------------------
+
+    if fog_level == "strong":
+
+        situations.append(
+            "🌫️ 霧・視界不良"
+        )
+
+    elif fog_level == "attention":
+
+        situations.append(
+            "🌫️ 霧・低い雲に注意"
+        )
+
+
+    # --------------------------------------------------------
+    # 強風
+    # --------------------------------------------------------
+
+    if wind is not None:
+
+        if wind >= 10:
+            situations.append(
+                "💨 強風"
+            )
+
+        elif wind >= 7:
+            situations.append(
+                "💨 風に注意"
+            )
+
+
+    # --------------------------------------------------------
+    # 高湿度＋雲
+    # 山間部で雲に包まれる可能性
+    # --------------------------------------------------------
+
+    if (
+        humidity is not None
+        and humidity >= 90
+        and cloud is not None
+        and cloud >= 90
+        and fog_level == "normal"
+    ):
+
+        situations.append(
+            "☁️ 低い雲に注意"
+        )
+
+
+    # --------------------------------------------------------
+    # 降水なし・特に注意なし
+    # --------------------------------------------------------
+
+    if not situations:
+
+        if (
+            cloud is not None
+            and cloud >= 80
+        ):
+            situations.append(
+                "☁️ 雲が多い"
+            )
+
+        else:
+            situations.append(
+                "✓ 大きな注意なし"
+            )
+
+
+    return "・".join(
+        situations
+    )
 
 # ============================================================
 # 体調注意時間
@@ -3052,31 +3183,42 @@ body {
         ">
 
 
-            <div class="hour-time">
+             <div class="hour-time">
                 {{ item.dt.strftime("%H:%M") }}
             </div>
 
 
-            <div class="hour-icon">
-                {{ item.icon }}
-            </div>
+<div class="hour-weather">
+
+    <span class="hour-icon">
+        {{ item.icon }}
+    </span>
+
+    <span class="weather-name">
+        {{ item.display_weather }}
+    </span>
+
+</div>
 
 
-            <div class="hour-weather">
+<div class="
+    hour-situation
+    {% if item.travel_level == 'danger' %}
+        danger
+    {% elif item.travel_level == 'attention'
+          or item.health_level != 'normal'
+          or item.fog_visibility_level != 'normal' %}
+        attention
+    {% endif %}
+">
 
-                {% if item.travel_level == "danger" %}
-                    <strong>⚠️</strong>
-                {% endif %}
+    {% if item.health_level == "strong" %}
+        🩺
+    {% endif %}
 
-                {% if item.health_level == "strong" %}
-                    <span class="health-attention">
-                        🩺
-                    </span>
-                {% endif %}
+    {{ item.situation }}
 
-                {{ item.display_weather }}
-
-            </div>
+</div>
 
 
             <div class="hour-temp">
@@ -3865,6 +4007,9 @@ def index():
 
         item["display_weather"] = (
             weather_display(item)
+        )
+        item["situation"] = (
+            situation_display(item)
         )
 
         item["health_level"] = (
