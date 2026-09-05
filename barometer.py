@@ -2197,7 +2197,7 @@ body {
 
     border-bottom: 1px solid #302a2c;
 
-    gap: 8px;
+    gap: 18px;
 
     padding: 7px 4px;
 
@@ -2259,6 +2259,7 @@ body {
 .hour-time {
     font-size: 15px;
     color: #d6ced0;
+    white-space: nowrap;
 }
 
 .hour-icon {
@@ -2269,7 +2270,7 @@ body {
 .hour-weather {
     color: #d4cccd;
     text-align: center;
-    padding-left: 20px;
+    padding-left: 30px;
 }
 
 .hour-temp {
