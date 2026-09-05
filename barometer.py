@@ -3520,17 +3520,7 @@ body {
 
     {% if item.surface_pressure is not none %}
 
-        {{ "%.1f"|format(item.surface_pressure) }}
-
-        {% if item.pressure_level == "strong-fall" %}
-            <span class="health-attention"> ↓ 急低下</span>
-        {% elif item.pressure_level == "fall" %}
-            <span> ↓ 低下</span>
-        {% elif item.pressure_level == "strong-rise" %}
-            <span> ↑ 急上昇</span>
-        {% elif item.pressure_level == "rise" %}
-            <span> ↑ 上昇</span>
-        {% endif %}
+        <span class="pressure-value">{{ "%.1f"|format(item.surface_pressure) }}</span>{% if item.pressure_level == "strong-fall" %}<span class="health-attention"> ↓ 急低下</span>{% elif item.pressure_level == "fall" %}<span> ↓ 低下</span>{% elif item.pressure_level == "strong-rise" %}<span> ↑ 急上昇</span>{% elif item.pressure_level == "rise" %}<span> ↑ 上昇</span>{% endif %}
 
     {% else %}
 
