@@ -2273,7 +2273,7 @@ body {
 }
 .hour-situation {
     text-align: center;
-    padding-left: 30px;
+    padding-left: 0;
 }
 
 .hour-temp {
