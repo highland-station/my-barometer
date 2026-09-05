@@ -2054,13 +2054,13 @@ body {
     display: grid;
 
     grid-template-columns:
-        64px
-        54px
-        112px
-        70px
+        90px
         80px
-        86px
-        105px;
+        1fr
+        95px
+        105px
+        115px
+        120px;
 
     justify-content: start;
 
@@ -2108,6 +2108,11 @@ body {
 
 .hour-weather {
     color: #d4cccd;
+    text-align: center;
+}
+.hour-situation {
+    text-align: center;
+    padding-left: 30px;
 }
 
 .hour-temp {
