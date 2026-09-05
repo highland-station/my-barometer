@@ -2197,7 +2197,7 @@ body {
 
     border-bottom: 1px solid #302a2c;
 
-    gap: 18px;
+    gap: 8px;
 
     padding: 7px 4px;
 
@@ -2269,6 +2269,9 @@ body {
 
 .hour-weather {
     color: #d4cccd;
+    text-align: center;
+}
+.hour-situation {
     text-align: center;
     padding-left: 30px;
 }
