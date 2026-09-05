@@ -2269,6 +2269,7 @@ body {
 .hour-weather {
     color: #d4cccd;
     text-align: center;
+    padding-left: 20px;
 }
 
 .hour-temp {
