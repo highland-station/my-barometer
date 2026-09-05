@@ -2172,11 +2172,8 @@ body {
    ========================================================= */
 
 .hourly {
-
     border-top: 1px solid #393234;
-
     border-bottom: 1px solid #393234;
-
     overflow: hidden;
 }
 
@@ -2185,14 +2182,12 @@ body {
 
     grid-template-columns:
         70px
-        150px
-        220px
-        70px
-        80px
-        90px
+        145px
+        minmax(220px, 1fr)
+        65px
+        75px
+        85px
         95px;
-
-    justify-content: start;
 
     align-items: center;
 
@@ -2205,20 +2200,8 @@ body {
     padding: 6px 4px;
 
     font-size: 12px;
-}
-    justify-content: start;
 
-    align-items: center;
-
-    min-height: 64px;
-
-    border-bottom: 1px solid #302a2c;
-
-    gap: 8px;
-
-    padding: 7px 4px;
-
-    font-size: 13px;
+    box-sizing: border-box;
 }
 
 .hour-row:last-child {
@@ -2226,30 +2209,23 @@ body {
 }
 
 .hour-row.header-row {
-
     min-height: 42px;
-
     color: #81797b;
-
     font-size: 11px;
-
     letter-spacing: .05em;
 }
+
 .hour-row.header-row > div:nth-child(3) {
     text-align: center;
 }
 
 .hour-time {
-
     font-size: 15px;
-
     color: #d6ced0;
 }
 
 .hour-icon {
-
     font-size: 23px;
-
     text-align: center;
 }
 
@@ -2265,14 +2241,10 @@ body {
     margin-right: 4px;
 }
 
-.hour-weather .hour-icon {
-    display: inline;
-    margin-right: 4px;
-}
 .hour-situation {
-    text-align: center;
+    text-align: left;
     padding: 0 4px;
-    line-height: 1.5;
+    line-height: 1.45;
     font-size: 11px;
 }
 
@@ -2290,18 +2262,13 @@ body {
 }
 
 .travel-status {
-
     text-align: center;
-
     font-size: 11px;
-
     border-radius: 999px;
-
     padding: 5px 7px;
 }
 
 .travel-good {
-
     color: #a9b0a8;
 
     background: rgba(
@@ -2313,7 +2280,6 @@ body {
 }
 
 .travel-attention {
-
     color: #d0a995;
 
     background: rgba(
@@ -2325,7 +2291,6 @@ body {
 }
 
 .travel-danger {
-
     color: #e0a3a9;
 
     background: rgba(
@@ -2339,14 +2304,11 @@ body {
 }
 
 .health-attention {
-
     color: #e0a3a9;
-
     font-weight: 600;
 }
 
 .row-attention {
-
     background:
         linear-gradient(
             90deg,
@@ -2356,7 +2318,6 @@ body {
 }
 
 .row-danger {
-
     background:
         linear-gradient(
             90deg,
@@ -2367,7 +2328,6 @@ body {
     box-shadow:
         inset 3px 0 0 #ad6973;
 }
-
 
 /* =========================================================
    🐕 いよかん生活ガイド
