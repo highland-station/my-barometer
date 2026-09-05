@@ -2055,13 +2055,13 @@ body {
     display: grid;
 
     grid-template-columns:
-    80px
-    70px
-    220px
     85px
-    95px
-    105px
-    110px;
+    75px
+    260px
+    90px
+    100px
+    110px
+    115px;
 
     align-items: center;
 
@@ -2089,6 +2089,10 @@ body {
     font-size: 11px;
 
     letter-spacing: .05em;
+}
+
+.header-row > div {
+    text-align: center;
 }
 
 .hour-time {
