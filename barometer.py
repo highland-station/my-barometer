@@ -2250,6 +2250,9 @@ body {
     padding: 0 4px;
     line-height: 1.45;
     font-size: 11px;
+    width: 180px !important;
+    max-width: 180px !important;
+    box-sizing: border-box;
 }
 
 .hour-temp {
