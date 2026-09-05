@@ -2181,18 +2181,31 @@ body {
 }
 
 .hour-row {
-
     display: grid;
 
     grid-template-columns:
-        90px
+        70px
+        150px
+        220px
+        70px
         80px
-        1fr
-        95px
-        105px
-        115px
-        120px;
+        90px
+        95px;
 
+    justify-content: start;
+
+    align-items: center;
+
+    min-height: 58px;
+
+    border-bottom: 1px solid #302a2c;
+
+    gap: 6px;
+
+    padding: 6px 4px;
+
+    font-size: 12px;
+}
     justify-content: start;
 
     align-items: center;
@@ -2244,6 +2257,12 @@ body {
     color: #d4cccd;
     text-align: center;
     white-space: nowrap;
+    font-size: 12px;
+}
+
+.hour-weather .hour-icon {
+    display: inline;
+    margin-right: 4px;
 }
 
 .hour-weather .hour-icon {
@@ -2252,7 +2271,9 @@ body {
 }
 .hour-situation {
     text-align: center;
-    padding-left: 30px;
+    padding: 0 4px;
+    line-height: 1.5;
+    font-size: 11px;
 }
 
 .hour-temp {
