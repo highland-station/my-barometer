@@ -2036,32 +2036,29 @@ body {
 }
 
 
+
 /* =========================================================
    1時間ごとの天気
    ========================================================= */
 
 .hourly {
     width: 100%;
-    
     border-top: 1px solid #393234;
-
     border-bottom: 1px solid #393234;
-
     overflow: hidden;
 }
 
 .hour-row {
-
     display: grid;
 
     grid-template-columns:
-    90px
-    80px
-    320px
-    95px
-    105px
-    115px
-    120px;
+        90px
+        80px
+        320px
+        95px
+        105px
+        115px
+        120px;
 
     align-items: center;
 
@@ -2080,8 +2077,10 @@ body {
     border-bottom: 0;
 }
 
-.hour-row.header-row {
 
+/* ヘッダー */
+
+.hour-row.header-row {
     min-height: 42px;
 
     color: #81797b;
@@ -2090,7 +2089,32 @@ body {
 
     letter-spacing: .05em;
 }
-.header-row > div:nth-child(3),
+
+
+/* 時間 */
+
+.header-row > div:nth-child(1) {
+    text-align: left;
+    padding-left: 8px;
+}
+
+
+/* 天気 */
+
+.header-row > div:nth-child(2) {
+    text-align: center;
+}
+
+
+/* 状況 */
+
+.header-row > div:nth-child(3) {
+    text-align: left;
+}
+
+
+/* 気温・降水量・気圧・麓への移動 */
+
 .header-row > div:nth-child(4),
 .header-row > div:nth-child(5),
 .header-row > div:nth-child(6),
@@ -2098,51 +2122,45 @@ body {
     text-align: center;
 }
 
-.header-row > div:nth-child(1) {
-    text-align: left;
-    padding-left: 8px;
-}
 
-.header-row > div:nth-child(2) {
-    text-align: center;
-}
-
-.header-row > div:nth-child(3) {
-    text-align: left;
-}
+/* データ */
 
 .hour-time {
-
     font-size: 15px;
-
     color: #d6ced0;
 }
 
 .hour-icon {
-
     font-size: 23px;
-
     text-align: center;
 }
 
 .hour-weather {
     color: #d4cccd;
-    text-align: center;
-}    
-.hour-temp {
     text-align: left;
-    padding-left: 18px;
+}
+
+.hour-temp {
+    text-align: center;
 }
 
 .hour-rain {
     text-align: center;
-    
+}
+
 .hour-pressure {
     text-align: center;
+    color: #aaa1a3;
+}
+
+
+/* 麓への移動 */
 
 .hour-row > div:last-child {
-    padding-left: 15px;
+    text-align: center;
 }
+
+.travel-status {
     text-align: center;
 
     font-size: 11px;
@@ -2153,7 +2171,6 @@ body {
 }
 
 .travel-good {
-
     color: #a9b0a8;
 
     background: rgba(
@@ -2165,7 +2182,6 @@ body {
 }
 
 .travel-attention {
-
     color: #d0a995;
 
     background: rgba(
@@ -2177,7 +2193,6 @@ body {
 }
 
 .travel-danger {
-
     color: #e0a3a9;
 
     background: rgba(
@@ -2191,14 +2206,12 @@ body {
 }
 
 .health-attention {
-
     color: #e0a3a9;
 
     font-weight: 600;
 }
 
 .row-attention {
-
     background:
         linear-gradient(
             90deg,
@@ -2208,7 +2221,6 @@ body {
 }
 
 .row-danger {
-
     background:
         linear-gradient(
             90deg,
