@@ -2857,6 +2857,90 @@ border-radius: 999px;
 
 
 }
+/* =========================================================
+   🐕 いよかん生活ガイド
+   ========================================================= */
+
+.dog-guide-card {
+    background: #211d1e;
+    border: 1px solid #332d2f;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+.dog-guide-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.dog-guide-item {
+    background: #1b1819;
+    border: 1px solid #302a2c;
+    border-radius: 10px;
+    padding: 14px 10px;
+    text-align: center;
+}
+
+.dog-guide-icon {
+    font-size: 23px;
+    margin-bottom: 6px;
+}
+
+.dog-guide-label {
+    color: #8f8789;
+    font-size: 11px;
+    margin-bottom: 7px;
+}
+
+.dog-guide-value {
+    color: #eee8e8;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.dog-guide-times {
+    margin-top: 12px;
+    border-top: 1px solid #302a2c;
+}
+
+.dog-guide-time-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding: 10px 4px;
+    border-bottom: 1px solid #302a2c;
+    font-size: 12px;
+}
+
+.dog-guide-time-row span {
+    color: #938b8d;
+}
+
+.dog-guide-time-row strong {
+    color: #e7e0e1;
+    font-weight: 500;
+    text-align: right;
+}
+
+@media (max-width: 800px) {
+
+    .dog-guide-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .dog-guide-item {
+        padding: 12px 8px;
+    }
+
+    .dog-guide-time-row {
+        font-size: 11px;
+    }
+}
 
 </style>
 
@@ -3405,6 +3489,120 @@ border-radius: 999px;
 
 </section>
 
+<!-- =========================================================
+     🐕 いよかん生活ガイド
+     ========================================================= -->
+
+<section class="section">
+
+    <div class="section-title">
+        🐕 いよかん生活ガイド
+    </div>
+
+    <div class="dog-guide-card">
+
+        <div class="dog-guide-grid">
+
+            <div class="dog-guide-item">
+                <div class="dog-guide-icon">🏠</div>
+                <div class="dog-guide-label">
+                    自宅の散歩
+                </div>
+                <div class="dog-guide-value">
+                    {% if good_walk_times %}
+                        🟢 散歩OK
+                    {% else %}
+                        🔴 注意
+                    {% endif %}
+                </div>
+            </div>
+
+
+            <div class="dog-guide-item">
+                <div class="dog-guide-icon">🌊</div>
+                <div class="dog-guide-label">
+                    麓の散歩
+                </div>
+                <div class="dog-guide-value">
+                    🟡 判定準備中
+                </div>
+            </div>
+
+
+            <div class="dog-guide-item">
+                <div class="dog-guide-icon">🔥</div>
+                <div class="dog-guide-label">
+                    アスファルト
+                </div>
+                <div class="dog-guide-value">
+                    {% if asphalt_ng_times %}
+                        🔴 NG時間あり
+                    {% else %}
+                        🟢 問題なし
+                    {% endif %}
+                </div>
+            </div>
+
+
+            <div class="dog-guide-item">
+                <div class="dog-guide-icon">❄️</div>
+                <div class="dog-guide-label">
+                    エアコン
+                </div>
+                <div class="dog-guide-value">
+                    {% if aircon_times %}
+                        🟠 使用推奨
+                    {% else %}
+                        🟢 基本不要
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+
+        <div class="dog-guide-times">
+
+            <div class="dog-guide-time-row">
+                <span>🐾 散歩おすすめ</span>
+                <strong>
+                    {% if good_walk_times %}
+                        {{ good_walk_times | join("・") }}
+                    {% else %}
+                        なし
+                    {% endif %}
+                </strong>
+            </div>
+
+
+            <div class="dog-guide-time-row">
+                <span>🔥 アスファルトNG</span>
+                <strong>
+                    {% if asphalt_ng_times %}
+                        {{ asphalt_ng_times | join("・") }}
+                    {% else %}
+                        なし
+                    {% endif %}
+                </strong>
+            </div>
+
+
+            <div class="dog-guide-time-row">
+                <span>❄️ 冷房推奨</span>
+                <strong>
+                    {% if aircon_times %}
+                        {{ aircon_times | join("・") }}
+                    {% else %}
+                        なし
+                    {% endif %}
+                </strong>
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
 
 <!-- ===================================================== -->
 <!-- 24時間・1時間ごとの天気 -->
@@ -4740,7 +4938,136 @@ def index():
 
     ]
 
+# =========================================================
+# 🐕 いよかん生活ガイド
+# =========================================================
 
+def dog_aircon_level(temp, humidity):
+    """犬基準のエアコン判定"""
+
+    if temp is None:
+        return "unknown"
+
+    # 25℃以下は基本的にエアコン不要
+    if temp <= 25:
+        if humidity is not None and humidity >= 90:
+            return "attention"
+        return "off"
+
+    if temp <= 27:
+        return "watch"
+
+    if temp <= 29:
+        return "recommended"
+
+    return "strong"
+
+
+def dog_walk_level(temp, rain, wind, humidity=None):
+    """犬基準の散歩判定"""
+
+    if temp is None:
+        return "attention"
+
+    # 雨
+    if rain is not None and rain >= 5:
+        return "danger"
+
+    # 強い風
+    if wind is not None and wind >= 10:
+        return "danger"
+
+    # 暑さ
+    if temp >= 30:
+        return "danger"
+
+    if temp >= 27:
+        return "attention"
+
+    if humidity is not None and humidity >= 90 and temp >= 25:
+        return "attention"
+
+    if rain is not None and rain > 0:
+        return "attention"
+
+    return "good"
+
+
+def dog_asphalt_level(temp, rain, cloud=None):
+    """アスファルトの注意度"""
+
+    if temp is None:
+        return "attention"
+
+    # 雨で路面が濡れている場合
+    if rain is not None and rain > 0:
+        return "good"
+
+    # 暑い時間帯
+    if temp >= 30:
+        return "danger"
+
+    if temp >= 27:
+        return "attention"
+
+    return "good"
+
+
+dog_guidance = []
+
+for item in forecasts:
+
+    temp = item.get("temperature")
+    rain = item.get("precipitation", 0)
+    humidity = item.get("humidity")
+    wind = item.get("wind_speed")
+
+    walk = dog_walk_level(
+        temp,
+        rain,
+        wind,
+        humidity
+    )
+
+    asphalt = dog_asphalt_level(
+        temp,
+        rain
+    )
+
+    aircon = dog_aircon_level(
+        temp,
+        humidity
+    )
+
+    dog_guidance.append({
+        "time": item["dt"].strftime("%H:%M"),
+        "temperature": temp,
+        "walk": walk,
+        "asphalt": asphalt,
+        "aircon": aircon
+    })
+
+
+# 散歩おすすめ時間
+good_walk_times = [
+    item["time"]
+    for item in dog_guidance
+    if item["walk"] == "good"
+]
+
+# アスファルトNG時間
+asphalt_ng_times = [
+    item["time"]
+    for item in dog_guidance
+    if item["asphalt"] == "danger"
+]
+
+# エアコン推奨時間
+aircon_times = [
+    item["time"]
+    for item in dog_guidance
+    if item["aircon"] in ("recommended", "strong")
+]
     # --------------------------------------------------------
     # JSON
     # --------------------------------------------------------
