@@ -2057,11 +2057,11 @@ body {
     grid-template-columns:
         70px
         60px
-        minmax(110px, 1fr)
+        150px
         75px
         85px
         90px
-        110px;
+        95px;
 
     justify-content: stretch;
 
@@ -3393,7 +3393,7 @@ new Chart(document.getElementById("weatherChart"), {
         responsive: true,
         maintainAspectRatio: false,
         layout: {
-            padding: { bottom: 25, top: 8, left: 4, right: 4 }
+            padding: { bottom: 62, top: 8, left: 4, right: 4 }
         },
         interaction: { mode: "index", intersect: false },
         plugins: {
