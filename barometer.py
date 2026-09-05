@@ -2185,7 +2185,7 @@ body {
     grid-template-columns:
         90px
         80px
-        320px
+        1fr
         95px
         105px
         115px
@@ -2268,7 +2268,7 @@ body {
 
 .hour-weather {
     color: #d4cccd;
-    text-align: left;
+    text-align: center;
 }
 
 .hour-temp {
