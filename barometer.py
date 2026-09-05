@@ -5061,154 +5061,51 @@ asphalt_ng_times = [
     for item in dog_guidance
     if item["asphalt"] == "danger"
 ]
-
 # エアコン推奨時間
 aircon_times = [
     item["time"]
     for item in dog_guidance
     if item["aircon"] in ("recommended", "strong")
 ]
-    # --------------------------------------------------------
-    # JSON
-    # --------------------------------------------------------
 
-    chart_labels_json = json.dumps(
-        chart_labels,
-        ensure_ascii=False
-    )
+# --------------------------------------------------------
+# JSON
+# --------------------------------------------------------
 
-    chart_temperatures_json = json.dumps(
-        chart_temperatures,
-        ensure_ascii=False
-    )
+chart_labels_json = json.dumps(
+    chart_labels,
+    ensure_ascii=False
+)
 
-    chart_icons_json = json.dumps(
-        chart_icons,
-        ensure_ascii=False
-    )
+chart_temperatures_json = json.dumps(
+    chart_temperatures,
+    ensure_ascii=False
+)
 
-    chart_precipitation_json = json.dumps(
-        chart_precipitation,
-        ensure_ascii=False
-    )
+chart_icons_json = json.dumps(
+    chart_icons,
+    ensure_ascii=False
+)
 
-    chart_pressures_json = json.dumps(
-        chart_pressures,
-        ensure_ascii=False
-    )
+chart_precipitation_json = json.dumps(
+    chart_precipitation,
+    ensure_ascii=False
+)
 
-    pressure_levels_json = json.dumps(
-        pressure_levels,
-        ensure_ascii=False
-    )
+chart_pressures_json = json.dumps(
+    chart_pressures,
+    ensure_ascii=False
+)
 
-    pressure_changes_json = json.dumps(
-        pressure_changes,
-        ensure_ascii=False
-    )
+pressure_levels_json = json.dumps(
+    pressure_levels,
+    ensure_ascii=False
+)
 
-
-    return render_template_string(
-
-        HTML,
-
-        updated=now.strftime(
-            "%Y/%m/%d %H:%M"
-        ),
-
-        amedas=amedas,
-
-        home_temp=home_temp,
-
-        home_surface_pressure=(
-            home_surface_pressure
-        ),
-
-        home_sea_pressure=(
-            home_sea_pressure
-        ),
-
-        home_weather=home_weather,
-
-        home_icon=home_icon,
-
-        home_forecast_time=(
-            home_forecast_time
-        ),
-
-        pressure_trend_text=(
-            pressure_trend_text
-        ),
-
-        pressure_level_text=(
-            pressure_level_text
-        ),
-
-        weather_status=(
-            weather_status
-        ),
-
-        weather_status_sub=(
-            weather_status_sub
-        ),
-
-        forecasts=forecasts,
-
-        health_attention=(
-            health_attention
-        ),
-
-        travel_health_attention=(
-            travel_health_attention
-        ),
-
-        travel_window=(
-            travel_window
-        ),
-
-        travel_danger_items=(
-            travel_danger_items
-        ),
-
-        travel_danger_start=(
-            travel_danger_start
-        ),
-
-        travel_danger_end=(
-            travel_danger_end
-        ),
-
-        chart_labels=(
-            chart_labels_json
-        ),
-
-        chart_temperatures=(
-            chart_temperatures_json
-        ),
-
-        chart_icons=(
-            chart_icons_json
-        ),
-
-        chart_precipitation=(
-            chart_precipitation_json
-        ),
-
-        chart_pressures=(
-            chart_pressures_json
-        ),
-
-        pressure_levels=(
-            pressure_levels_json
-        ),
-
-        pressure_changes=(
-            pressure_changes_json
-        ),
-
-    )
-
-
+pressure_changes_json = json.dumps(
+    pressure_changes,
+    ensure_ascii=False
+)
 # ============================================================
 # Render / Gunicorn
 # ============================================================
